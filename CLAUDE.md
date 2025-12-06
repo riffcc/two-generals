@@ -10,10 +10,10 @@ The solution achieves:
 - **Deterministic coordination** with probability 1 - 10^-1565 (physical certainty)
 - **All-or-nothing semantics**: Both parties ATTACK together or both ABORT together
 - **Zero asymmetric outcomes** via bilateral construction properties
-- **1.1-500x TCP throughput** over lossy channels at 90%+ loss rates
-- **Near-line-rate throughput** (minus lost percentage) — at 98% loss, expect 1.5-1.9% throughput of remaining line
 
 ---
+
+# Part I: The Theoretical Result
 
 ## Core Protocol: Epistemic Proof Escalation
 
@@ -21,9 +21,11 @@ The solution achieves:
 
 Instead of acknowledgments (which create infinite regress), we employ **signed cryptographic proofs** that escalate through four levels, culminating in a bilateral epistemic fixpoint.
 
-### Protocol Phases
+**This section uses ONLY signatures. No DH. No shared secrets. Pure epistemic logic.**
 
-#### Phase 1: Commitment Flooding (C_X)
+---
+
+### Phase 1: Commitment Flooding (C_X)
 
 Each party generates and continuously floods a signed commitment:
 
@@ -37,7 +39,7 @@ C_X = Sign_X("I will attack at dawn if you agree")
 
 ---
 
-#### Phase 2: Double Proof Construction (D_X)
+### Phase 2: Double Proof Construction (D_X)
 
 Upon receiving counterparty's commitment, construct the double proof:
 
@@ -53,7 +55,7 @@ The double proof embeds **both** original commitments inside a new signed envelo
 
 ---
 
-#### Phase 3: Triple Proof Escalation (T_X)
+### Phase 3: Triple Proof Escalation (T_X)
 
 Upon receiving D_Y, construct the triple proof:
 
@@ -71,19 +73,23 @@ By construction, T_X contains:
 
 ---
 
-#### Phase 4: Quaternary Proof Fixpoint (Q)
+### Phase 4: Quaternary Proof Fixpoint (Q)
 
 Upon receiving T_Y, construct the quaternary proof:
 
 ```
-Q_X = Sign_X(T_X ∥ T_Y ∥ "Fixpoint achieved")
+Q = Sign_X(T_X ∥ T_Y ∥ "Fixpoint achieved")
 ```
 
 The quad proof staples both triple proofs together.
 
 **What it proves:** "I know that you know that I know that you know..." — **this is the fixed point.**
 
-**The Bilateral Construction Property:**
+---
+
+## The Bilateral Construction Property
+
+**This is the core theoretical contribution.**
 
 For Party A to build Q:
 1. They must have their own T_A
@@ -96,26 +102,9 @@ For Party B to build Q:
 2. By logical necessity, they can construct their own T_B (or already have)
 3. Q construction is symmetric — if one party can build Q, the other can too
 
----
+**You cannot have Q without the counterparty being able to construct Q.**
 
-#### Phase 5: Collaborative Diffie-Hellman Completion
-
-After quaternary proofs, both parties engage in Diffie-Hellman exchange:
-
-```
-DH_A = Sign_A(g^a ∥ Q_A ∥ "DH contribution")
-DH_B = Sign_B(g^b ∥ Q_B ∥ "DH contribution")
-
-S = g^ab (computed collaboratively)
-```
-
-The shared secret S satisfies the **collaborative computation property**: it can only exist if both parties contributed their private values and received the counterparty's public contribution.
-
-**Decision Rule:**
-- **ATTACK** if: Party has computed shared secret S before deadline
-- **ABORT** if: Cannot compute S before deadline
-
-This guarantees symmetric outcomes through inherent DH symmetry.
+The artifact IS the proof.
 
 ---
 
@@ -133,12 +122,12 @@ The existence of Q is already common knowledge of its existence. Q is a **self-r
 
 ### Proof Structure Table
 
-| Level | Constructed when… | What it proves |
-|-------|-------------------|----------------|
-| Commitment C_X | Unilaterally | "I will attack if you agree." |
-| Double D_X = {C_X, C_Y}_X | Have other's commitment | "I know you've committed." |
-| Triple T_X = {D_X, D_Y}_X | Have other's double | "I know that you know I've committed." |
-| Quad Q = {T_A, T_B} | Have both triples | Epistemic fixpoint — no infinite regress required |
+| Level | Constructed when… | What it proves | Epistemic Depth |
+|-------|-------------------|----------------|-----------------|
+| C_X | Unilaterally | "I will attack if you agree." | 0 |
+| D_X = {C_X, C_Y}_X | Have other's commitment | "I know you've committed." | 1 |
+| T_X = {D_X, D_Y}_X | Have other's double | "I know that you know I've committed." | 2 |
+| Q = {T_A, T_B} | Have both triples | Epistemic fixpoint | ω (fixed point) |
 
 ---
 
@@ -159,37 +148,40 @@ Gray (1978) and Halpern-Moses (1990) proved that common knowledge cannot be achi
 
 The **construction and existence** of Q proves common knowledge. You cannot build Q without having the components that prove the counterparty also has everything needed to build Q.
 
----
+### Decision Rule (Pure Epistemic)
 
-## Project Goals
+- **ATTACK** if: Party has constructed Q before deadline
+- **ABORT** if: Cannot construct Q before deadline
 
-### Formal Verification
-
-- Complete Lean 4 proof of safety, liveness, and validity theorems
-- Zero unproven assumptions in coordination logic
-- Property-based testing with 10,000+ adversarial test cases
-- Jepsen-style testing under real packet loss, reordering, duplication
-
-### Implementation Targets
-
-| Platform | Status | Description |
-|----------|--------|-------------|
-| Python | 🔴 TODO | Reference implementation with Ed25519 + X25519 |
-| Rust | 🔴 TODO | High-performance implementation with formal verification hooks |
-| WASM | 🔴 TODO | Browser-compatible for web applications |
-| Web | 🔴 TODO | Interactive visualization of proof escalation |
-
-### Protocol Adapters
-
-- **ToTG (TCP over TGP)**: TCP guarantees at UDP speeds
-- **UoTG (UDP over TGP)**: Enhanced UDP with coordination semantics
-- Compatible with existing infrastructure via adapter layer
+This is sufficient. No DH required. The theoretical result is complete.
 
 ---
 
-## Claims and Validation
+# Part II: Practical Hardening
 
-### Performance Claims
+## Collaborative Diffie-Hellman Completion
+
+For production deployment, we add a DH layer atop Q to derive a shared secret:
+
+```
+DH_A = Sign_A(g^a ∥ Q_A ∥ "DH contribution")
+DH_B = Sign_B(g^b ∥ Q_B ∥ "DH contribution")
+
+S = g^ab (computed collaboratively)
+```
+
+The shared secret S satisfies the **collaborative computation property**: it can only exist if both parties contributed their private values and received the counterparty's public contribution.
+
+**Why add DH?**
+- Provides a usable shared secret for subsequent encrypted communication
+- Adds Byzantine hardening (active adversary resistance)
+- Enables session key derivation for ToTG/UoTG adapters
+
+**Note:** DH is engineering, not the theoretical contribution. The pure epistemic protocol (Part I) already solves Gray's impossibility.
+
+---
+
+## Performance Characteristics
 
 | Metric | Claim | Validation Method |
 |--------|-------|-------------------|
@@ -197,13 +189,43 @@ The **construction and existence** of Q proves common knowledge. You cannot buil
 | 1.1-500x TCP throughput | Context-dependent improvement | Benchmarking suite |
 | Line-rate - loss% | At 98% loss → ~1.9% throughput | Mathematical proof + empirical |
 
-### Security Properties
+---
+
+## Security Properties
 
 | Property | Guarantee | Mechanism |
 |----------|-----------|-----------|
 | Adversarial observation | Defeated | Public-key encryption blinds adversaries |
 | Strategic interference | Reduced to noise | State-independent strategies = probabilistic |
 | Espionage/compromise | Handled | Double-blinded key exchange, continuous flooding |
+
+---
+
+## Protocol Adapters
+
+- **ToTG (TCP over TGP)**: TCP guarantees at UDP speeds
+- **UoTG (UDP over TGP)**: Enhanced UDP with coordination semantics
+- Compatible with existing infrastructure via adapter layer
+
+---
+
+# Part III: Implementation & Verification
+
+## Formal Verification
+
+- Complete Lean 4 proof of safety, liveness, and validity theorems
+- Zero unproven assumptions in coordination logic
+- Property-based testing with 10,000+ adversarial test cases
+- Jepsen-style testing under real packet loss, reordering, duplication
+
+## Implementation Targets
+
+| Platform | Status | Description |
+|----------|--------|-------------|
+| Python | 🔴 TODO | Reference implementation with Ed25519 + X25519 |
+| Rust | 🔴 TODO | High-performance implementation with formal verification hooks |
+| WASM | 🔴 TODO | Browser-compatible for web applications |
+| Web | 🔴 TODO | Interactive visualization of proof escalation |
 
 ---
 
@@ -226,7 +248,9 @@ The defining validation:
 
 ---
 
-## Multi-Agent Coordination (Palace Turbo)
+# Part IV: Multi-Agent Coordination
+
+## Palace Turbo (PROGRESS.json)
 
 When running in Palace Turbo swarm mode, Claude agents coordinate via `PROGRESS.json`.
 
@@ -239,21 +263,14 @@ Agents are assigned IDs like: `sonnet-4`, `opus-1`, `haiku-3`
 ```json
 {
   "inbox": {
-    "sonnet-4": [
-      {"from": "opus-1", "message": "Rust impl started", "timestamp": "..."}
-    ],
-    "opus-1": [],
-    "haiku-3": []
+    "sonnet-4": [{"from": "opus-1", "message": "...", "timestamp": "..."}]
   },
   "noticeboard": [
     {"agent": "sonnet-4", "notice": "Python reference complete", "timestamp": "..."}
   ],
-  "cleanup": [
-    {"agent": "haiku-3", "request": "Prune inbox older than 1 hour", "timestamp": "..."}
-  ],
+  "cleanup": [],
   "action": [
-    {"agent": "sonnet-4", "action": "Created tgp/core.py", "status": "complete", "timestamp": "..."},
-    {"agent": "opus-1", "action": "Started Rust benchmarks", "status": "in_progress", "timestamp": "..."}
+    {"agent": "sonnet-4", "action": "Created tgp/core.py", "status": "complete"}
   ]
 }
 ```
@@ -268,7 +285,7 @@ import fcntl
 
 def atomic_update(update_fn):
     with open('PROGRESS.json', 'r+') as f:
-        fcntl.flock(f, fcntl.LOCK_EX)  # Exclusive lock
+        fcntl.flock(f, fcntl.LOCK_EX)
         try:
             data = json.load(f)
             new_data = update_fn(data)
@@ -277,28 +294,6 @@ def atomic_update(update_fn):
             json.dump(new_data, f, indent=2)
         finally:
             fcntl.flock(f, fcntl.LOCK_UN)
-```
-
-### Communication Patterns
-
-**Inbox:** Direct messages to specific agents
-```json
-{"from": "opus-1", "to": "sonnet-4", "message": "Need review on proof.lean", "timestamp": "..."}
-```
-
-**Noticeboard:** Broadcast to all agents
-```json
-{"agent": "haiku-3", "notice": "BREAKING: Found edge case in Phase 3", "priority": "high"}
-```
-
-**Cleanup:** Request pruning of stale data
-```json
-{"agent": "sonnet-4", "request": "Archive completed actions older than 24h"}
-```
-
-**Action:** Log what you've done (for backchecks)
-```json
-{"agent": "opus-1", "action": "Completed adversarial test suite", "files": ["tests/adversarial.py"], "status": "complete"}
 ```
 
 ---
@@ -337,35 +332,26 @@ two-generals-public/
 
 ## Skills / Masks
 
-### Required: distributed-systems
-
-When pondering TGP, Byzantine fault tolerance, or network protocols, activate the `distributed-systems` skill:
+When pondering TGP, Byzantine fault tolerance, or network protocols, activate:
 
 ```
 /activate-skill distributed-systems
 ```
-
-This provides expertise in:
-- Consensus algorithms (Paxos, Raft, PBFT)
-- CAP theorem and its implications
-- Network partition handling
-- Byzantine fault tolerance
-- Distributed systems impossibility results
 
 ---
 
 ## Success Criteria
 
 ### Phase 1: Reference Implementation (Python)
-- [ ] Core TGP protocol working
+- [ ] Core TGP protocol (Part I only — pure epistemic)
 - [ ] All failure modes tested
 - [ ] Protocol of Theseus test passes
 - [ ] 90% packet loss still achieves symmetric outcomes
 
 ### Phase 2: Production Implementation (Rust)
+- [ ] Add DH hardening (Part II)
 - [ ] Zero-copy packet handling
 - [ ] Benchmarks vs TCP under loss
-- [ ] Memory safety verified
 - [ ] Async/await support
 
 ### Phase 3: Ubiquitous Deployment
@@ -392,15 +378,6 @@ This protocol solves a 47-year impossibility result. It should be:
 - **Free** for anyone to use
 - **Open** for anyone to verify
 - **Protected** from proprietary capture
-
-### Why "Embarrassment-Proof"?
-
-Every claim must be:
-- **Defensible** with formal proofs
-- **Verifiable** by running the tests
-- **Reproducible** by anyone
-
-No "trust us" - only "verify yourself."
 
 ### Why "The Protocol of Theseus"?
 
