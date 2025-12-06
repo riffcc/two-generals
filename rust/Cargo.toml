@@ -29,7 +29,7 @@ ed25519-dalek = { version = "2.1.1", features = ["digest", "rand_core"] }
 blake3 = "1.5.0"
 
 # Serialization
-cbor4ii = { version = "0.8.0", features = ["serde1"] }
+cbor4ii = { version = "1.2", features = ["serde1"] }
 serde = { version = "1.0.193", features = ["derive"] }
 serde_bytes = "0.11.14"
 
@@ -42,6 +42,7 @@ anyhow = "1.0.75"
 thiserror = "1.0.50"
 
 # Utilities
+hex = "0.4.3"
 tracing = "0.1.40"
 tracing-subscriber = "0.3.18"
 rand = "0.8.5"

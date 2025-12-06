@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Two Generals Protocol - Interactive Visualizer</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Two Generals Protocol</h1>
+            <p class="subtitle">A Deterministically Failsafe Solution to the Coordinated Attack Problem</p>
+        </header>
+
+        <main>
+            <section class="controls">
+                <div class="control-group">
+                    <label for="loss-rate">Packet Loss Rate: <span id="loss-value">50%</span></label>
+                    <input type="range" id="loss-rate" min="0" max="99" value="50">
+                </div>
+                <div class="control-group">
+                    <label for="speed">Simulation Speed: <span id="speed-value">1x</span></label>
+                    <input type="range" id="speed" min="0.25" max="4" step="0.25" value="1">
+                </div>
+                <div class="button-group">
+                    <button id="start-btn" class="primary">Start Protocol</button>
+                    <button id="reset-btn">Reset</button>
+                </div>
+            </section>
+
+            <section class="visualization">
+                <div class="party-container">
+                    <div class="party" id="alice">
+                        <h3>Alice (General A)</h3>
+                        <div class="state-indicator">
+                            <span class="phase">Phase: <strong id="alice-phase">INIT</strong></span>
+                            <span class="status" id="alice-status">Waiting</span>
+                        </div>
+                        <div class="proof-stack" id="alice-proofs">
+                            <!-- Proof artifacts will be rendered here -->
+                        </div>
+                    </div>
+
+                    <div class="channel" id="network">
+                        <svg id="packet-svg" viewBox="0 0 400 200"></svg>
+                        <div class="channel-stats">
+                            <span>Sent: <strong id="packets-sent">0</strong></span>
+                            <span>Lost: <strong id="packets-lost">0</strong></span>
+                            <span>Delivered: <strong id="packets-delivered">0</strong></span>
+                        </div>
+                    </div>
+
+                    <div class="party" id="bob">
+                        <h3>Bob (General B)</h3>
+                        <div class="state-indicator">
+                            <span class="phase">Phase: <strong id="bob-phase">INIT</strong></span>
+                            <span class="status" id="bob-status">Waiting</span>
+                        </div>
+                        <div class="proof-stack" id="bob-proofs">
+                            <!-- Proof artifacts will be rendered here -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="proof-escalation">
+                <h2>Proof Escalation Progress</h2>
+                <div class="escalation-diagram">
+                    <div class="level" id="level-c">
+                        <span class="level-name">Commitment (C)</span>
+                        <div class="level-bars">
+                            <div class="bar alice-bar" id="alice-c"></div>
+                            <div class="bar bob-bar" id="bob-c"></div>
+                        </div>
+                    </div>
+                    <div class="level" id="level-d">
+                        <span class="level-name">Double Proof (D)</span>
+                        <div class="level-bars">
+                            <div class="bar alice-bar" id="alice-d"></div>
+                            <div class="bar bob-bar" id="bob-d"></div>
+                        </div>
+                    </div>
+                    <div class="level" id="level-t">
+                        <span class="level-name">Triple Proof (T)</span>
+                        <div class="level-bars">
+                            <div class="bar alice-bar" id="alice-t"></div>
+                            <div class="bar bob-bar" id="bob-t"></div>
+                        </div>
+                    </div>
+                    <div class="level" id="level-q">
+                        <span class="level-name">Quad Proof (Q)</span>
+                        <div class="level-bars">
+                            <div class="bar alice-bar" id="alice-q"></div>
+                            <div class="bar bob-bar" id="bob-q"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <section class="outcome">
+                <h2>Protocol Outcome</h2>
+                <div class="outcome-display" id="outcome">
+                    <span class="pending">Awaiting protocol completion...</span>
+                </div>
+                <div class="stats">
+                    <div class="stat">
+                        <span class="stat-label">Time Elapsed</span>
+                        <span class="stat-value" id="elapsed-time">0.00s</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Total Packets</span>
+                        <span class="stat-value" id="total-packets">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Actual Loss Rate</span>
+                        <span class="stat-value" id="actual-loss">0%</span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="theseus-test">
+                <h2>Protocol of Theseus Test</h2>
+                <p>Run multiple simulations to verify symmetric outcomes across all loss rates.</p>
+                <div class="theseus-controls">
+                    <button id="run-theseus" class="primary">Run 100 Simulations</button>
+                    <span id="theseus-progress"></span>
+                </div>
+                <div class="theseus-results" id="theseus-results">
+                    <!-- Results will be rendered here -->
+                </div>
+            </section>
+
+            <section class="explanation">
+                <h2>How It Works</h2>
+                <div class="explainer">
+                    <div class="step">
+                        <h4>Phase 1: Commitment (C)</h4>
+                        <p>Each party generates and floods a signed commitment: "I will attack if you agree"</p>
+                    </div>
+                    <div class="step">
+                        <h4>Phase 2: Double Proof (D)</h4>
+                        <p>Upon receiving counterparty's C, construct D = Sign(C_mine + C_theirs + "Both committed")</p>
+                    </div>
+                    <div class="step">
+                        <h4>Phase 3: Triple Proof (T)</h4>
+                        <p>Upon receiving D, construct T = Sign(D_mine + D_theirs + "Both have double proofs")</p>
+                    </div>
+                    <div class="step">
+                        <h4>Phase 4: Quaternary Fixpoint (Q)</h4>
+                        <p>Upon receiving T, construct Q - the bilateral receipt pair that proves mutual constructibility</p>
+                    </div>
+                </div>
+                <div class="key-insight">
+                    <strong>Key Insight:</strong> Q_A exists implies Q_B is constructible.
+                    The artifact IS the proof. No infinite regress required.
+                </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>&copy; 2025 Riff Labs | AGPLv3 | <em>e cinere surgemus</em></p>
+        </footer>
+    </div>
+
+    <script type="module" src="visualizer.js"></script>
+</body>
+</html>
