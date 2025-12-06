@@ -80,10 +80,13 @@ By construction, T_X contains:
 Upon receiving T_Y, construct the quaternary proof:
 
 ```
-Q = Sign_X(T_X ∥ T_Y ∥ "Fixpoint achieved")
+Q_A = Sign_A(T_A ∥ T_B ∥ "Fixpoint achieved")
+Q_B = Sign_B(T_B ∥ T_A ∥ "Fixpoint achieved")
 ```
 
-The quad proof staples both triple proofs together.
+**Q is not a single artifact — it's a bilateral receipt pair: (Q_A, Q_B).**
+
+Each half staples both triple proofs together. Neither can exist without the other being constructible.
 
 **What it proves:** "I know that you know that I know that you know..." — **this is the fixed point.**
 
@@ -93,18 +96,65 @@ The quad proof staples both triple proofs together.
 
 **This is the core theoretical contribution.**
 
-For Party A to build Q:
-1. They must have their own T_A
-2. They must have received T_B from Party B
-3. T_B proves Party B had D_A and D_B
-4. Therefore, Party B has all pieces necessary to construct Q upon receiving T_A
+### The Mutual Implication
 
-For Party B to build Q:
-1. They must receive T_A
-2. By logical necessity, they can construct their own T_B (or already have)
-3. Q construction is symmetric — if one party can build Q, the other can too
+```
+Q_A exists → contains T_B → Bob had D_A → Bob can construct T_B → Bob can construct Q_B
+Q_B exists → contains T_A → Alice had D_B → Alice can construct T_A → Alice can construct Q_A
+```
 
-**You cannot have Q without the counterparty being able to construct Q.**
+**Each half cryptographically proves the other half is constructible.**
+
+### Nested Proof Embedding
+
+When Alice receives T_B, she gets MORE than just T_B:
+
+```
+T_B = Sign_B(D_B, D_A)
+         └─ D_B is EMBEDDED inside T_B
+             └─ Alice now has D_B for free
+                 └─ Alice can construct T_A = Sign_A(D_A, D_B)
+                     └─ Alice can construct Q_A = Sign_A(T_A, T_B)
+```
+
+The moment Alice receives T_B, she has ALL components needed for Q_A. And for T_B to exist, Bob must have had D_A — which means Bob has all components except T_A, which Alice is flooding.
+
+### Why There's No Asymmetric State
+
+For Alice to construct Q_A:
+1. She needs T_B (received from Bob)
+2. T_B proves Bob constructed it
+3. Bob constructing T_B proves Bob had D_A
+4. Bob having D_A means Bob can construct T_B
+5. Bob having T_B means Bob just needs T_A for Q_B
+6. T_A is being flooded by Alice
+7. Under fair-lossy, T_A arrives
+8. Bob constructs Q_B
+
+**There is no state where Alice can construct Q_A but Bob cannot construct Q_B.**
+
+The dependencies are fully symmetric at every level. If the information flow has reached the point where one party can complete, the other party is guaranteed to complete under fair-lossy conditions.
+
+### The Knot, Not The Chain
+
+Traditional protocols create a chain of acknowledgments:
+```
+MSG → ACK → ACK-of-ACK → ACK-of-ACK-of-ACK → ...
+```
+
+Every link could be "the last message" that fails.
+
+TGP creates a **knot**:
+```
+Q_A ←──────→ Q_B
+ │            │
+ └── T_B ─────┘
+ └── T_A ─────┘
+```
+
+The knot can only be tied by BOTH parties together. Neither half can exist without the other being constructible. There's no "last message" — there's a **mutual cryptographic entanglement**.
+
+**You cannot have Q_A without the counterparty being able to construct Q_B.**
 
 The artifact IS the proof.
 
@@ -112,7 +162,17 @@ The artifact IS the proof.
 
 ## Formal Epistemic Fixpoint
 
-The quaternary proof Q satisfies:
+The bilateral receipt pair (Q_A, Q_B) satisfies:
+
+```
+∃(Q_A, Q_B) : Q_A ↔ Q_B
+
+Where:
+  Q_A exists  →  Q_B is constructible
+  Q_B exists  →  Q_A is constructible
+```
+
+And the epistemic interpretation:
 
 ```
 ∃Q : (Q → K_A K_B Q) ∧ (Q → K_B K_A Q)
@@ -120,7 +180,7 @@ The quaternary proof Q satisfies:
 
 Where K_X means "party X knows that..."
 
-The existence of Q is already common knowledge of its existence. Q is a **self-referential epistemic artifact** where construction itself proves mutual knowledge with no infinite regress required.
+The existence of either half of Q already proves the other half is constructible. Q is a **self-certifying bilateral artifact** where construction itself proves mutual knowledge with no infinite regress required.
 
 ### Proof Structure Table
 
@@ -128,8 +188,19 @@ The existence of Q is already common knowledge of its existence. Q is a **self-r
 |-------|-------------------|----------------|-----------------|
 | C_X | Unilaterally | "I will attack if you agree." | 0 |
 | D_X = {C_X, C_Y}_X | Have other's commitment | "I know you've committed." | 1 |
-| T_X = {D_X, D_Y}_X | Have other's double | "I know that you know I've committed." | 2 |
-| Q = {T_A, T_B} | Have both triples | Epistemic fixpoint | ω (fixed point) |
+| T_X = {D_X, D_Y}_X | Have other's double proof | "I know that you know I've committed." | 2 |
+| (Q_A, Q_B) | Each has both triples | Mutual constructibility — epistemic fixpoint | ω (fixed point) |
+
+### The Self-Certifying Property
+
+Each proof level embeds the previous level:
+- D_X contains C_X and C_Y
+- T_X contains D_X and D_Y (which contain all C's)
+- Q_X contains T_X and T_Y (which contain all D's and C's)
+
+**Receiving a higher-level proof gives you all lower-level proofs for free.**
+
+This is why Q is self-certifying: having Q_A means you have T_B embedded, which means you have D_A and D_B embedded, which means you have all four commitments. The entire proof tree is in your hands.
 
 ---
 
