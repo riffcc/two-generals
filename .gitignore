@@ -1,0 +1,14 @@
+# Keep synthesis folder private until ready
+synthesis/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Lean
+.lake/
+
+# IDE
+.vscode/
+.idea/
