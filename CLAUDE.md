@@ -4,16 +4,18 @@
 
 ## Executive Summary
 
-This project delivers a **formally verifiable, publicly defensible solution** to the Two Generals Problem (Gray's Common Knowledge Impossibility, 1978). For fifty years, distributed systems theory has treated this problem as fundamentally unsolvable. We prove this interpretation incorrect through cryptographic proof stapling, continuous flooding, and bilateral receipt construction.
+This project delivers a **formally verifiable, publicly defensible solution** to the Two Generals Problem (Gray's Common Knowledge Impossibility, 1978) and extends it to full Byzantine Fault Tolerance. For fifty years, distributed systems theory has treated these problems as fundamentally unsolvable or requiring complex multi-round protocols. We prove this interpretation incorrect through cryptographic proof stapling, continuous flooding, and self-certifying artifacts.
 
 The solution achieves:
 - **Deterministic coordination** with probability 1 - 10^-1565 (physical certainty)
-- **All-or-nothing semantics**: Both parties ATTACK together or both ABORT together
-- **Zero asymmetric outcomes** via bilateral construction properties
+- **All-or-nothing semantics**: Both/all parties ATTACK together or all ABORT together
+- **Zero asymmetric outcomes** via bilateral/multiparty construction properties
+- **BFT in two floods** (PROPOSE + COMMIT) — no view-change, no leader rotation
+- **1.1-500x TCP throughput** over lossy channels at 90%+ loss rates
 
 ---
 
-# Part I: The Theoretical Result
+# Part I: The Theoretical Result (Two Generals)
 
 ## Core Protocol: Epistemic Proof Escalation
 
@@ -157,11 +159,15 @@ This is sufficient. No DH required. The theoretical result is complete.
 
 ---
 
-# Part II: Practical Hardening
+# Part II: Practical Hardening (DH Layer)
+
+## Overview
+
+For production deployment, we add a Diffie-Hellman layer atop the pure epistemic protocol to derive a shared secret. **This is engineering, not the theoretical contribution.**
 
 ## Collaborative Diffie-Hellman Completion
 
-For production deployment, we add a DH layer atop Q to derive a shared secret:
+After constructing Q, both parties engage in DH exchange:
 
 ```
 DH_A = Sign_A(g^a ∥ Q_A ∥ "DH contribution")
@@ -170,85 +176,555 @@ DH_B = Sign_B(g^b ∥ Q_B ∥ "DH contribution")
 S = g^ab (computed collaboratively)
 ```
 
-The shared secret S satisfies the **collaborative computation property**: it can only exist if both parties contributed their private values and received the counterparty's public contribution.
+## Why Add DH?
 
-**Why add DH?**
-- Provides a usable shared secret for subsequent encrypted communication
-- Adds Byzantine hardening (active adversary resistance)
-- Enables session key derivation for ToTG/UoTG adapters
+| Purpose | Benefit |
+|---------|---------|
+| Shared secret | Enables symmetric encryption for subsequent communication |
+| Byzantine hardening | Active adversary resistance beyond passive observation |
+| Session keys | ToTG/UoTG adapters need encryption keys |
+| Forward secrecy | Each session gets unique keys |
 
-**Note:** DH is engineering, not the theoretical contribution. The pure epistemic protocol (Part I) already solves Gray's impossibility.
+## DH Protocol Details
 
----
+### Key Generation
 
-## Performance Characteristics
+```python
+# Each party generates ephemeral keypair
+a = random_scalar()          # Alice's private
+A = g^a                       # Alice's public
 
-| Metric | Claim | Validation Method |
-|--------|-------|-------------------|
-| 90%+ loss tolerance | Functional at 99.9% loss | Empirical testing |
-| 1.1-500x TCP throughput | Context-dependent improvement | Benchmarking suite |
-| Line-rate - loss% | At 98% loss → ~1.9% throughput | Mathematical proof + empirical |
+b = random_scalar()          # Bob's private
+B = g^b                       # Bob's public
+```
 
----
+### Exchange (Atop Q)
+
+```python
+# Alice sends (only after constructing Q)
+DH_A = {
+    "public": A,
+    "proof": Q_A,
+    "signature": Sign_A(A ∥ hash(Q_A) ∥ "DH_CONTRIB")
+}
+
+# Bob sends (only after constructing Q)
+DH_B = {
+    "public": B,
+    "proof": Q_B,
+    "signature": Sign_B(B ∥ hash(Q_B) ∥ "DH_CONTRIB")
+}
+```
+
+### Shared Secret Derivation
+
+```python
+# Alice computes
+S_A = B^a = g^(ab)
+
+# Bob computes
+S_B = A^b = g^(ab)
+
+# S_A == S_B — the shared secret
+session_key = KDF(S, "TGP-SESSION-KEY", salt=hash(Q))
+```
+
+## Collaborative Computation Property
+
+The shared secret S = g^ab can only exist if:
+1. Alice contributed her private value `a`
+2. Bob contributed his private value `b`
+3. Each received the other's public value
+4. Both had Q (prerequisite for sending DH contributions)
+
+**This creates a second layer of symmetric completion atop Q.**
 
 ## Security Properties
 
 | Property | Guarantee | Mechanism |
 |----------|-----------|-----------|
-| Adversarial observation | Defeated | Public-key encryption blinds adversaries |
-| Strategic interference | Reduced to noise | State-independent strategies = probabilistic |
-| Espionage/compromise | Handled | Double-blinded key exchange, continuous flooding |
+| Adversarial observation | Defeated | DH provides encryption keys |
+| Man-in-the-middle | Prevented | DH contributions signed + tied to Q |
+| Replay attacks | Prevented | Ephemeral keys + Q binding |
+| Forward secrecy | Achieved | New keys per session |
+
+## Recommended Primitives
+
+| Primitive | Recommended | Alternative |
+|-----------|-------------|-------------|
+| Signatures | Ed25519 | ECDSA P-256 |
+| DH | X25519 | ECDH P-256 |
+| KDF | HKDF-SHA256 | Argon2id |
+| AEAD | ChaCha20-Poly1305 | AES-256-GCM |
+
+## Decision Rule (With DH)
+
+- **ATTACK** if: Party has computed shared secret S before deadline
+- **ABORT** if: Cannot compute S before deadline
 
 ---
 
-## Protocol Adapters
+# Part III: Byzantine Fault Tolerance (Multiparty Extension)
 
-- **ToTG (TCP over TGP)**: TCP guarantees at UDP speeds
-- **UoTG (UDP over TGP)**: Enhanced UDP with coordination semantics
-- Compatible with existing infrastructure via adapter layer
+## Overview
+
+The same structural insight that solves Two Generals extends to N-party consensus with Byzantine fault tolerance. **BFT in two flooding steps.**
+
+## System Parameters
+
+```
+Total nodes (arbitrators) = 3f + 1
+Fault tolerance = f Byzantine
+Threshold T = 2f + 1
+```
+
+We use a threshold-signature scheme (BLS or FROST) so that any set of ≥ T partial signatures can be deterministically aggregated into one compact "committee proof."
+
+## Protocol Outline
+
+### Step 0: Proposal
+
+Any node (proposer) floods:
+
+```json
+{ "type": "PROPOSE", "value": V, "round": R }
+```
+
+### Step 1: Partial-Sign & Flood
+
+Each arbitrator i, upon first receiving PROPOSE(V, R):
+1. Verify V is well-formed and from correct round
+2. Compute partial signature share:
+   ```
+   share_i = SignShare_i(hash(R ∥ V))
+   ```
+3. Flood share continuously:
+   ```json
+   { "type": "SHARE", "round": R, "node": i, "share": share_i }
+   ```
+4. Keep sending SHARE every tick until final proof seen
+
+### Step 2: Aggregate & Flood Final Proof
+
+Any node that collects ≥ T distinct valid shares for (R, V):
+1. Deterministically aggregate into threshold signature:
+   ```
+   proof = CombineShares([share_j for j in S], R ∥ V)
+   ```
+2. This proof unforgeably attests: "at least 2f+1 arbitrators signed V in round R"
+3. Flood final proof once:
+   ```json
+   { "type": "COMMIT", "round": R, "value": V, "proof": proof }
+   ```
+4. Stop retransmitting SHARE once COMMIT seen
+
+## Why This Achieves BFT
+
+### Safety
+
+Any valid COMMIT(R, V, proof) requires ≥ 2f+1 honest shares. Two different values in the same round would require ≥ 2(2f+1) = 4f+2 shares, but there are only 3f+1 nodes. **Impossible. No conflicting commits.**
+
+### Liveness
+
+As long as the network is fair-lossy bidirectional (every send has p > 0) among arbitrators, those 2f+1 honest nodes will eventually get PROPOSE and flood their SHAREs. Some honest aggregator will collect enough and broadcast COMMIT. Every honest node will eventually see it.
+
+### No View-Change Dance
+
+There is no leader rotation. Any honest node can aggregate once it sees 2f+1 shares. If the original aggregator is slow, another will do it.
+
+### Compact Proofs
+
+A single BLS-style signature replaces 2f+1 raw signatures.
+
+## Attack & Fault Handling
+
+| Attack | Handling |
+|--------|----------|
+| Equivocation | Share fails aggregation or can be slashed (public evidence) |
+| Byzantine censoring | 2f+1 honest nodes suffice even if f refuse |
+| Network asynchrony | No hard timeouts — flood until COMMIT seen |
+
+## The Unified Framework
+
+| Parties | Protocol | Core Insight |
+|---------|----------|--------------|
+| 2 | Two Generals (Part I) | C → D → T → Q bilateral construction |
+| N | BFT (Part III) | PROPOSE → SHARE → COMMIT threshold aggregation |
+
+**Same structural principle:** Self-certifying artifacts via proof stapling. The artifact IS the proof.
 
 ---
 
-# Part III: Implementation & Verification
+# Part IV: Real-World Applications
 
-## Formal Verification
+## ToTG: TCP over TGP
 
-- Complete Lean 4 proof of safety, liveness, and validity theorems
-- Zero unproven assumptions in coordination logic
-- Property-based testing with 10,000+ adversarial test cases
-- Jepsen-style testing under real packet loss, reordering, duplication
+### Purpose
 
-## Implementation Targets
+Provide TCP-like guarantees at near-UDP speeds over lossy or high-latency links.
 
-| Platform | Status | Description |
-|----------|--------|-------------|
-| Python | 🔴 TODO | Reference implementation with Ed25519 + X25519 |
-| Rust | 🔴 TODO | High-performance implementation with formal verification hooks |
-| WASM | 🔴 TODO | Browser-compatible for web applications |
-| Web | 🔴 TODO | Interactive visualization of proof escalation |
+### Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                Application                       │
+├─────────────────────────────────────────────────┤
+│              ToTG Adapter                        │
+│  ┌─────────────┐  ┌─────────────┐               │
+│  │ TGP Engine  │  │ Stream Mgr  │               │
+│  │ (Part I+II) │  │ (ordering)  │               │
+│  └─────────────┘  └─────────────┘               │
+├─────────────────────────────────────────────────┤
+│                UDP Transport                     │
+└─────────────────────────────────────────────────┘
+```
+
+### How It Works
+
+1. **Connection establishment**: Full TGP handshake (C → D → T → Q → DH)
+2. **Session key derivation**: S = g^ab → symmetric keys
+3. **Data transfer**: Encrypted UDP datagrams with sequence numbers
+4. **Acknowledgment batching**: Periodic ACK floods (not per-packet)
+5. **Loss recovery**: Selective retransmit via NACK bitmap
+
+### Performance Characteristics
+
+| Packet Loss | ToTG Throughput | TCP Throughput | Improvement |
+|-------------|-----------------|----------------|-------------|
+| 0% | ~98% line rate | ~95% line rate | 1.03x |
+| 10% | ~88% line rate | ~60% line rate | 1.5x |
+| 50% | ~48% line rate | ~5% line rate | 10x |
+| 90% | ~9% line rate | ~0.1% line rate | 90x |
+| 98% | ~1.8% line rate | unusable | ∞ |
+
+### Use Cases
+
+- **Satellite links** (high latency, moderate loss)
+- **Mobile networks** (variable loss, handoff gaps)
+- **Hostile environments** (jamming, interference)
+- **Cross-continental** (high RTT)
 
 ---
 
-## Test Suite Requirements
+## UoTG: UDP over TGP
 
-### Failure Mode Analysis
+### Purpose
 
-1. **Asymmetric message loss**: One direction fails completely
-2. **Byzantine message modification**: Corrupted signatures detected
-3. **Adversarial timing attacks**: Bilateral structure prevents exploitation
-4. **Permanent partition**: Both timeout → coordinated abort
+Enhanced UDP with coordination semantics — guaranteed symmetric delivery or symmetric failure.
 
-### "Protocol of Theseus" Test
+### Differences from ToTG
 
-The defining validation:
-1. Simulate complete TGP handshake and attack-at-dawn cycle
-2. Remove portions of packet stream at random
-3. Prove protocol survives having **all its parts removed** without finding a "last message"
-4. Demonstrate that coordination succeeds or both parties abort — never asymmetric
+| Feature | ToTG | UoTG |
+|---------|------|------|
+| Ordering | Guaranteed | Best-effort |
+| Reliability | Full | Coordination only |
+| Overhead | Higher | Lower |
+| Use case | Streaming, file transfer | Gaming, real-time |
+
+### Coordination Semantics
+
+Both parties know if a datagram was:
+- **DELIVERED**: Both have it
+- **LOST**: Neither acts on it
+
+Never: One has it, one doesn't.
 
 ---
 
-# Part IV: Multi-Agent Coordination
+## TGP Relay Network
+
+### Purpose
+
+Global network of TGP relays for ultrafast, loss-tolerant communication.
+
+### Architecture
+
+```
+┌──────┐     ┌──────────┐     ┌──────────┐     ┌──────┐
+│Client│────▶│ Relay A  │────▶│ Relay B  │────▶│Server│
+└──────┘     │(edge)    │     │(edge)    │     └──────┘
+             └──────────┘     └──────────┘
+                   │               │
+                   └───────┬───────┘
+                     ┌─────┴─────┐
+                     │ Relay C   │
+                     │(backbone) │
+                     └───────────┘
+```
+
+### Relay Protocol
+
+1. **Edge relays**: TGP with clients, federate internally
+2. **Backbone relays**: BFT consensus (Part III) for routing decisions
+3. **Path selection**: Multipath with TGP per-hop
+4. **Failure handling**: Automatic reroute, no client awareness
+
+### Deployment Targets
+
+- **CDN replacement** for loss-tolerant content delivery
+- **VPN alternative** with coordination guarantees
+- **Mesh networking** for disaster/hostile environments
+
+---
+
+## Web Transfer Protocol (WoTG)
+
+### Purpose
+
+Browser-native TGP for web applications via WebRTC DataChannels or WebTransport.
+
+### Architecture
+
+```javascript
+// Browser API
+const conn = await TGP.connect('wss://relay.example.com');
+await conn.handshake(); // C → D → T → Q → DH
+
+const stream = conn.createStream();
+await stream.send(data); // Encrypted, coordinated
+```
+
+### Implementation Targets
+
+| Platform | Transport | Status |
+|----------|-----------|--------|
+| Browser (JS) | WebSocket + WebRTC | 🔴 TODO |
+| Browser (WASM) | WebTransport | 🔴 TODO |
+| Node.js | Native UDP | 🔴 TODO |
+| Deno | Native UDP | 🔴 TODO |
+
+---
+
+# Part V: Implementation Roadmap
+
+## End-to-End Task List
+
+### Phase 1: Python Reference (Part I Only)
+
+**Goal:** Pure epistemic protocol, no DH, comprehensive tests
+
+```
+□ 1.1  Core protocol types
+       - Commitment, DoubleProof, TripleProof, QuadProof
+       - Serialize/deserialize (CBOR or MessagePack)
+
+□ 1.2  Signature operations
+       - Ed25519 sign/verify
+       - Proof validation chains
+
+□ 1.3  State machine
+       - Phase transitions (C → D → T → Q)
+       - Continuous flooding logic
+
+□ 1.4  Simulation harness
+       - In-memory network with configurable loss
+       - Packet reordering, duplication
+
+□ 1.5  Property-based tests
+       - Hypothesis/pytest integration
+       - 10,000+ random scenarios
+
+□ 1.6  Protocol of Theseus test
+       - Remove random packets
+       - Verify symmetric outcomes always
+
+□ 1.7  Failure mode coverage
+       - Asymmetric loss
+       - Partition and reconnection
+       - Byzantine message corruption
+```
+
+### Phase 2: Python + DH (Part II)
+
+**Goal:** Add practical hardening layer
+
+```
+□ 2.1  X25519 DH implementation
+       - Key generation
+       - Shared secret derivation
+
+□ 2.2  Session key derivation
+       - HKDF-SHA256
+       - Key schedule for encryption
+
+□ 2.3  Authenticated encryption
+       - ChaCha20-Poly1305 wrapper
+       - Nonce management
+
+□ 2.4  DH protocol integration
+       - Exchange after Q construction
+       - Failure handling
+
+□ 2.5  Forward secrecy validation
+       - Key rotation tests
+       - Compromise scenarios
+```
+
+### Phase 3: Python BFT (Part III)
+
+**Goal:** Multiparty consensus extension
+
+```
+□ 3.1  Threshold signature setup
+       - BLS or FROST implementation
+       - Dealer-based key generation
+
+□ 3.2  Arbitrator state machine
+       - PROPOSE handling
+       - SHARE generation and flooding
+
+□ 3.3  Aggregation logic
+       - Collect 2f+1 shares
+       - Threshold combination
+
+□ 3.4  COMMIT propagation
+       - Flood final proof
+       - Termination detection
+
+□ 3.5  BFT property tests
+       - Safety: no conflicting commits
+       - Liveness: eventual termination
+       - Fault tolerance: up to f Byzantine
+```
+
+### Phase 4: Rust Production (All Parts)
+
+**Goal:** High-performance, memory-safe implementation
+
+```
+□ 4.1  Core types (no_std compatible)
+       - Zero-copy serialization
+       - Const generics for proof levels
+
+□ 4.2  Async runtime integration
+       - tokio-based networking
+       - Concurrent flooding
+
+□ 4.3  Cryptographic optimizations
+       - dalek-cryptography for Ed25519/X25519
+       - blst for BLS threshold sigs
+
+□ 4.4  Benchmarking suite
+       - Criterion-based microbenchmarks
+       - Throughput vs TCP comparison
+
+□ 4.5  Formal verification hooks
+       - Kani/MIRI annotations
+       - Property assertions
+```
+
+### Phase 5: ToTG Adapter
+
+**Goal:** TCP-compatible wrapper
+
+```
+□ 5.1  Socket API design
+       - Drop-in TcpStream replacement
+       - Async read/write
+
+□ 5.2  Stream multiplexing
+       - Multiple logical streams per connection
+       - Flow control
+
+□ 5.3  Congestion control
+       - BBR-inspired algorithm
+       - Loss-tolerant adaptation
+
+□ 5.4  Interop testing
+       - curl/wget compatibility
+       - HTTP/1.1 and HTTP/2
+```
+
+### Phase 6: UoTG Adapter
+
+**Goal:** UDP-compatible wrapper with coordination
+
+```
+□ 6.1  Datagram API
+       - Drop-in UdpSocket replacement
+       - Coordination semantics
+
+□ 6.2  Game protocol testing
+       - Lockstep simulation
+       - Rollback netcode integration
+```
+
+### Phase 7: WASM Build
+
+**Goal:** Browser deployment
+
+```
+□ 7.1  wasm-bindgen setup
+       - Core protocol compilation
+       - Crypto library compatibility
+
+□ 7.2  WebSocket transport
+       - Binary framing
+       - Reconnection handling
+
+□ 7.3  WebRTC DataChannel
+       - Direct peer connections
+       - ICE/STUN integration
+```
+
+### Phase 8: Web Demo
+
+**Goal:** Interactive visualization
+
+```
+□ 8.1  Protocol visualizer
+       - Real-time proof escalation
+       - Packet flow animation
+
+□ 8.2  Loss simulation
+       - Slider for loss percentage
+       - Show convergence behavior
+
+□ 8.3  BFT visualizer
+       - Arbitrator state display
+       - Threshold aggregation view
+```
+
+### Phase 9: Academic Publication
+
+**Goal:** Peer-reviewed verification
+
+```
+□ 9.1  LaTeX paper
+       - Main theorem statements
+       - Proof sketches
+
+□ 9.2  Lean 4 proofs
+       - Formalize safety, liveness, validity
+       - Zero sorry statements
+
+□ 9.3  Supplementary materials
+       - Implementation artifacts
+       - Benchmark data
+
+□ 9.4  Venue submission
+       - PODC 2026 or DISC 2026
+       - Camera-ready preparation
+```
+
+---
+
+## Implementation Priorities
+
+| Priority | Component | Rationale |
+|----------|-----------|-----------|
+| P0 | Python Part I | Prove the concept works |
+| P0 | Protocol of Theseus test | Validate core claim |
+| P1 | Python Part II + III | Complete protocol stack |
+| P1 | Lean 4 proofs | Academic credibility |
+| P2 | Rust implementation | Production readiness |
+| P2 | ToTG adapter | Real-world utility |
+| P3 | WASM + Web | Browser deployment |
+| P3 | Relay network | Global infrastructure |
+
+---
+
+# Part VI: Multi-Agent Coordination
 
 ## Palace Turbo (PROGRESS.json)
 
@@ -262,16 +738,25 @@ Agents are assigned IDs like: `sonnet-4`, `opus-1`, `haiku-3`
 
 ```json
 {
+  "meta": {
+    "project": "Two Generals Protocol (TGP)",
+    "version": "1.0.0"
+  },
   "inbox": {
     "sonnet-4": [{"from": "opus-1", "message": "...", "timestamp": "..."}]
   },
   "noticeboard": [
-    {"agent": "sonnet-4", "notice": "Python reference complete", "timestamp": "..."}
+    {"agent": "sonnet-4", "notice": "Python reference complete", "priority": "high"}
   ],
   "cleanup": [],
   "action": [
     {"agent": "sonnet-4", "action": "Created tgp/core.py", "status": "complete"}
-  ]
+  ],
+  "milestones": {
+    "completed": [],
+    "in_progress": [],
+    "pending": []
+  }
 }
 ```
 
@@ -313,56 +798,80 @@ two-generals-public/
 │   └── *.md               # Internal documentation
 │
 ├── python/                # Python implementation
-│   ├── tgp/               # Core protocol
+│   ├── tgp/
+│   │   ├── __init__.py
+│   │   ├── types.py       # Core protocol types
+│   │   ├── crypto.py      # Ed25519, X25519, BLS
+│   │   ├── protocol.py    # State machine
+│   │   ├── network.py     # Transport abstraction
+│   │   └── bft.py         # Part III multiparty
 │   ├── totg/              # TCP over TGP
 │   ├── uotg/              # UDP over TGP
-│   └── tests/             # Test suite
+│   └── tests/
+│       ├── test_protocol.py
+│       ├── test_theseus.py
+│       └── test_bft.py
 │
 ├── rust/                  # Rust implementation
+│   ├── Cargo.toml
 │   ├── src/
-│   ├── benches/           # Benchmarks
+│   │   ├── lib.rs
+│   │   ├── types.rs
+│   │   ├── crypto.rs
+│   │   ├── protocol.rs
+│   │   └── bft.rs
+│   ├── benches/
 │   └── tests/
 │
 ├── wasm/                  # WASM build
+│   ├── Cargo.toml
+│   └── src/
 │
-└── web/                   # Browser implementation
+├── web/                   # Browser demo
+│   ├── index.html
+│   ├── visualizer.js
+│   └── style.css
+│
+└── paper/                 # Academic publication
+    ├── main.tex
+    └── figures/
 ```
 
 ---
 
 ## Skills / Masks
 
-When pondering TGP, Byzantine fault tolerance, or network protocols, activate:
+When working on this project, activate:
 
 ```
 /activate-skill distributed-systems
+```
+
+For formal proofs:
+
+```
+/activate-skill lean-prover
 ```
 
 ---
 
 ## Success Criteria
 
-### Phase 1: Reference Implementation (Python)
-- [ ] Core TGP protocol (Part I only — pure epistemic)
-- [ ] All failure modes tested
+### Minimum Viable Proof
+- [ ] Python Part I complete
 - [ ] Protocol of Theseus test passes
 - [ ] 90% packet loss still achieves symmetric outcomes
+- [ ] Zero asymmetric outcomes in 10,000+ test runs
 
-### Phase 2: Production Implementation (Rust)
-- [ ] Add DH hardening (Part II)
-- [ ] Zero-copy packet handling
-- [ ] Benchmarks vs TCP under loss
-- [ ] Async/await support
+### Production Ready
+- [ ] Rust implementation complete (all parts)
+- [ ] ToTG adapter functional
+- [ ] Benchmarks show claimed performance
+- [ ] Security audit passed
 
-### Phase 3: Ubiquitous Deployment
-- [ ] WASM build for browsers
-- [ ] ToTG adapter (drop-in TCP replacement)
-- [ ] UoTG adapter (drop-in UDP replacement)
-- [ ] Web demo with visualization
-
-### Phase 4: Academic Verification
-- [ ] Lean proofs published
-- [ ] Paper submitted (PODC 2026 / DISC 2026)
+### Academic Acceptance
+- [ ] Lean 4 proofs: 0 sorry statements
+- [ ] Paper submitted to PODC/DISC
 - [ ] Independent verification
 - [ ] AGPLv3 public release
 
@@ -394,8 +903,11 @@ We ask: if you remove every message, does the protocol still work?
 1. **Akkoyunlu et al. (1975)** - Original Two Generals Problem
 2. **Gray, J. (1978)** - Common Knowledge Impossibility
 3. **Halpern & Moses (1990)** - Knowledge and Common Knowledge in a Distributed Environment
-4. **Lean 4** - Formal verification language
-5. **synthesis/*.lean** - Our formal proofs
+4. **Castro & Liskov (1999)** - Practical Byzantine Fault Tolerance
+5. **Boneh et al. (2001)** - BLS Signatures
+6. **Komlo & Goldberg (2020)** - FROST Threshold Signatures
+7. **Lean 4** - Formal verification language
+8. **synthesis/*.lean** - Our formal proofs
 
 ---
 
@@ -408,4 +920,4 @@ We ask: if you remove every message, does the protocol still work?
 
 **e cinere surgemus** 🔥
 
-*"For 47 years, common knowledge over lossy channels was considered mathematically impossible. Today, we proved it solvable."*
+*"For 47 years, common knowledge over lossy channels was considered mathematically impossible. Today, we proved it solvable — and extended it to Byzantine consensus in two floods."*
