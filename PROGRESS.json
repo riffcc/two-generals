@@ -1,31 +1,149 @@
 {
-  "project": "two-generals-public",
-  "version": "0.1.0",
-  "created": "2025-12-06",
-  "inbox": {},
+  "meta": {
+    "project": "Two Generals Protocol (TGP)",
+    "version": "1.0.0",
+    "created": "2025-12-06T00:00:00Z",
+    "last_modified": "2025-12-06T00:00:00Z",
+    "schema_version": "1.0"
+  },
+  "inbox": {
+    "opus-1": [],
+    "sonnet-4": [],
+    "haiku-3": []
+  },
   "noticeboard": [
     {
-      "agent": "lief-forge",
-      "notice": "Project initialized. Lean proofs in synthesis/. Ready for implementation.",
-      "priority": "info",
-      "timestamp": "2025-12-06T16:30:00Z"
+      "id": "notice-001",
+      "timestamp": "2025-12-06T00:00:00Z",
+      "from": "opus-1",
+      "priority": "high",
+      "title": "Project Initialization",
+      "message": "TGP paper project initialized. CLAUDE.md and synthesis/ORIGINAL_PROMPT.md created. Main goal: formal academic paper proving classical solve of Coordinated Attack Problem via cryptographic proof stapling. See CLAUDE.md for full specification.",
+      "tags": ["init", "structure", "documentation"]
     }
   ],
   "cleanup": [],
   "action": [
     {
-      "agent": "lief-forge",
-      "action": "Created project structure",
-      "files": ["CLAUDE.md", "README.md", "PROGRESS.json", ".gitignore"],
-      "status": "complete",
-      "timestamp": "2025-12-06T16:30:00Z"
-    },
-    {
-      "agent": "lief-forge",
-      "action": "Copied Lean proofs to synthesis/",
-      "files": ["synthesis/*.lean", "synthesis/*.md"],
-      "status": "complete",
-      "timestamp": "2025-12-06T16:30:00Z"
+      "id": "action-001",
+      "timestamp": "2025-12-06T00:00:00Z",
+      "agent": "opus-1",
+      "action_type": "create",
+      "description": "Created project structure with CLAUDE.md, synthesis/ORIGINAL_PROMPT.md, and PROGRESS.json",
+      "files_affected": [
+        "CLAUDE.md",
+        "synthesis/ORIGINAL_PROMPT.md",
+        "PROGRESS.json"
+      ],
+      "status": "completed",
+      "verification": {
+        "method": "file_exists",
+        "verified": true
+      }
     }
-  ]
+  ],
+  "milestones": {
+    "completed": [],
+    "in_progress": [
+      {
+        "id": "milestone-001",
+        "title": "Project Documentation",
+        "description": "Complete CLAUDE.md and project structure",
+        "assigned_to": "opus-1",
+        "started": "2025-12-06T00:00:00Z",
+        "target_completion": null,
+        "dependencies": [],
+        "progress_percent": 100
+      }
+    ],
+    "pending": [
+      {
+        "id": "milestone-002",
+        "title": "Paper Enhancement",
+        "description": "Update main.tex with enhanced epistemic proof escalation formalism",
+        "assigned_to": null,
+        "dependencies": ["milestone-001"]
+      },
+      {
+        "id": "milestone-003",
+        "title": "Python Implementation",
+        "description": "Reference implementation with Ed25519 + X25519",
+        "assigned_to": null,
+        "dependencies": ["milestone-002"]
+      },
+      {
+        "id": "milestone-004",
+        "title": "Lean 4 Proofs",
+        "description": "Formal verification of safety, liveness, validity",
+        "assigned_to": null,
+        "dependencies": ["milestone-002"]
+      },
+      {
+        "id": "milestone-005",
+        "title": "Protocol of Theseus Test",
+        "description": "Adversarial test removing packet stream portions",
+        "assigned_to": null,
+        "dependencies": ["milestone-003"]
+      },
+      {
+        "id": "milestone-006",
+        "title": "Rust Implementation",
+        "description": "Production implementation with verification hooks",
+        "assigned_to": null,
+        "dependencies": ["milestone-003"]
+      },
+      {
+        "id": "milestone-007",
+        "title": "ToTG/UoTG Adapters",
+        "description": "TCP/UDP over TGP adapters",
+        "assigned_to": null,
+        "dependencies": ["milestone-006"]
+      }
+    ]
+  },
+  "protocol_spec": {
+    "phases": [
+      {
+        "phase": 1,
+        "name": "Commitment Flooding",
+        "symbol": "C_X",
+        "proves": "Unilateral intent",
+        "epistemic_level": 0
+      },
+      {
+        "phase": 2,
+        "name": "Double Proof Construction",
+        "symbol": "D_X = {C_X, C_Y}_X",
+        "proves": "I know you've committed",
+        "epistemic_level": 1
+      },
+      {
+        "phase": 3,
+        "name": "Triple Proof Escalation",
+        "symbol": "T_X = {D_X, D_Y}_X",
+        "proves": "I know that you know I've committed",
+        "epistemic_level": 2
+      },
+      {
+        "phase": 4,
+        "name": "Quaternary Proof Fixpoint",
+        "symbol": "Q = {T_A, T_B}",
+        "proves": "Epistemic fixpoint - common knowledge",
+        "epistemic_level": "omega (fixed point)"
+      },
+      {
+        "phase": 5,
+        "name": "Collaborative DH Completion",
+        "symbol": "S = g^ab",
+        "proves": "Bilateral exchange via collaborative computation",
+        "epistemic_level": "deterministic"
+      }
+    ],
+    "formal_fixpoint": "∃Q : (Q → K_A K_B Q) ∧ (Q → K_B K_A Q)",
+    "properties": {
+      "safety": "Protocol never produces asymmetric decisions",
+      "liveness": "Protocol always terminates (success or timeout)",
+      "validity": "Honest parties with eventual delivery → both ATTACK"
+    }
+  }
 }
