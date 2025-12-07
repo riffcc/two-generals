@@ -1132,6 +1132,25 @@ Packet Loss & TGP & TCP & Improvement \\
     \item[Relay Network:] Global loss-tolerant infrastructure
 \end{description}
 
+\subsection{Lightweight TGP: Non-Cryptographic Applications}
+
+When channel authenticity is already established (dedicated fiber, IPsec tunnel, on-chip interconnects), TGP can be reduced to state-flag exchange:
+
+\begin{center}
+\texttt{[ Header | My\_Phase (2 bits) | Your\_Phase\_I\_Saw (2 bits) | CRC ]}
+\end{center}
+
+This yields a payload of approximately 1 byte (plus UDP header), enabling MHz-rate coordination.
+
+\paragraph{High-Frequency Trading on Microwave Links.}
+Microwave links between trading centers are fast but noisy. HFT cannot wait for TCP retransmits. TGP Strategy: Blast the ``Buy Order'' state at 10MHz. The first photon through triggers coordinated action.
+
+\paragraph{Industrial Automation (Factory Floor).}
+Heavy EMI from motors causes packet corruption. Traditional protocols fail or require expensive shielding. TGP Strategy: Sensor floods ``EMERGENCY STOP''; controller floods ``STOP CONFIRMED.'' Machinery halts deterministically despite hostile RF environment.
+
+\paragraph{FPGA/ASIC Interconnects.}
+On-chip or board-to-board communication over noisy pins. TGP logic can be burned directly into silicon. Guarantees state synchronization without central clock, enabling distributed synchronization in high-speed circuits.
+
 %==============================================================================
 \section{Related Work}
 \label{sec:related}
