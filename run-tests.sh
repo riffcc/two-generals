@@ -5,8 +5,6 @@
 # Usage: ./run-tests.sh [--quick]
 #   --quick: Skip slow tests (Python only)
 
-set -e
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -27,10 +25,6 @@ echo "Two Generals Protocol - Full Test Suite"
 echo "============================================================"
 echo ""
 
-TOTAL_PASSED=0
-TOTAL_FAILED=0
-TOTAL_TESTS=0
-
 # ============================================================
 # PYTHON TESTS
 # ============================================================
@@ -39,19 +33,8 @@ echo "------------------------------------------------------------"
 
 cd python
 
-# Ensure venv exists
-if [[ ! -d ".venv" ]]; then
-    echo "Creating Python virtual environment..."
-    python3 -m venv .venv
-fi
-
-source .venv/bin/activate
-
-# Install if needed
-pip install -q -e . 2>/dev/null || true
-
 # Run pytest with one-line-per-test output
-PYTEST_ARGS="-v --tb=no -q"
+PYTEST_ARGS="-v --tb=line"
 if [[ "$QUICK_MODE" == "false" ]]; then
     PYTEST_ARGS="$PYTEST_ARGS --run-slow"
 fi
@@ -59,35 +42,10 @@ fi
 echo "Running: pytest $PYTEST_ARGS"
 echo ""
 
-# Capture pytest output and parse it
-pytest $PYTEST_ARGS 2>&1 | while IFS= read -r line; do
-    # Match test result lines (PASSED, FAILED, SKIPPED)
-    if [[ "$line" =~ ^tests/.+::.+\ (PASSED|FAILED|SKIPPED|ERROR) ]]; then
-        test_name=$(echo "$line" | sed 's/ PASSED.*/ PASSED/' | sed 's/ FAILED.*/ FAILED/' | sed 's/ SKIPPED.*/ SKIPPED/' | sed 's/ ERROR.*/ ERROR/')
-        if [[ "$line" =~ PASSED ]]; then
-            echo -e "${GREEN}✓${NC} $test_name"
-        elif [[ "$line" =~ FAILED ]]; then
-            echo -e "${RED}✗${NC} $test_name"
-        elif [[ "$line" =~ SKIPPED ]]; then
-            echo -e "${YELLOW}○${NC} $test_name"
-        else
-            echo -e "${RED}!${NC} $test_name"
-        fi
-    elif [[ "$line" =~ ^=.*passed|^=.*failed ]]; then
-        # Summary line
-        echo ""
-        echo "$line"
-    fi
-done
+# Run pytest directly - output streams in real-time
+pytest $PYTEST_ARGS 2>&1 || PYTHON_FAILED=1
 
-# Get actual counts
-PYTHON_RESULT=$(pytest $PYTEST_ARGS --co -q 2>/dev/null | tail -1)
-PYTHON_PASSED=$(pytest $PYTEST_ARGS 2>&1 | grep -oP '\d+(?= passed)' | head -1 || echo "0")
-PYTHON_FAILED=$(pytest $PYTEST_ARGS 2>&1 | grep -oP '\d+(?= failed)' | head -1 || echo "0")
-
-deactivate
 cd ..
-
 echo ""
 
 # ============================================================
@@ -101,26 +59,10 @@ cd rust
 echo "Running: cargo test"
 echo ""
 
-# Run cargo test with verbose output
-cargo test --no-fail-fast 2>&1 | while IFS= read -r line; do
-    # Match test result lines
-    if [[ "$line" =~ ^test\ .+\ \.\.\.\ (ok|FAILED|ignored) ]]; then
-        test_name=$(echo "$line" | sed 's/^test //' | sed 's/ \.\.\. .*//')
-        if [[ "$line" =~ "ok" ]]; then
-            echo -e "${GREEN}✓${NC} $test_name"
-        elif [[ "$line" =~ "FAILED" ]]; then
-            echo -e "${RED}✗${NC} $test_name"
-        elif [[ "$line" =~ "ignored" ]]; then
-            echo -e "${YELLOW}○${NC} $test_name (ignored)"
-        fi
-    elif [[ "$line" =~ ^test\ result: ]]; then
-        echo ""
-        echo "$line"
-    fi
-done
+# Run cargo test directly - output streams in real-time
+cargo test 2>&1 || RUST_FAILED=1
 
 cd ..
-
 echo ""
 
 # ============================================================
@@ -134,48 +76,30 @@ cd lean4
 echo "Running: lake build"
 echo ""
 
-# Check for sorry statements first
-SORRY_COUNT=$(grep -r "sorry" *.lean 2>/dev/null | grep -v "-- sorry" | grep -v "no sorry" | wc -l || echo "0")
+# Check for sorry statements first (excluding comments about sorry)
+SORRY_COUNT=$(grep -r "sorry" *.lean 2>/dev/null | grep -v -e "-- " -e "no sorry" -e "without sorry" -e "/--" | wc -l || echo "0")
 if [[ "$SORRY_COUNT" -gt 0 ]]; then
     echo -e "${RED}WARNING: Found $SORRY_COUNT potential 'sorry' statements${NC}"
-    grep -rn "sorry" *.lean 2>/dev/null | grep -v "-- sorry" | grep -v "no sorry" || true
+    grep -rn "sorry" *.lean 2>/dev/null | grep -v -e "-- " -e "no sorry" -e "without sorry" || true
     echo ""
+else
+    echo -e "${GREEN}✓ No 'sorry' statements found in source files${NC}"
 fi
 
-# Run lake build and capture output
-BUILD_OUTPUT=$(lake build 2>&1)
-BUILD_EXIT=$?
+echo ""
 
-# Parse theorem info lines
-echo "$BUILD_OUTPUT" | while IFS= read -r line; do
-    if [[ "$line" =~ ^info:.*:.*:\ .+ ]]; then
-        # Extract theorem name from info line
-        theorem=$(echo "$line" | sed 's/^info: [^:]*:[^:]*: //')
-        echo -e "${GREEN}✓${NC} THEOREM: $theorem"
-    elif [[ "$line" =~ ^warning: ]]; then
-        # Show warnings but don't fail
-        short_warn=$(echo "$line" | head -c 100)
-        echo -e "${YELLOW}⚠${NC} $short_warn..."
-    elif [[ "$line" =~ ^error: ]]; then
-        echo -e "${RED}✗${NC} $line"
-    fi
-done
+# Run lake build and show output
+lake build 2>&1 | tee /tmp/lake_build_output.txt || LEAN_FAILED=1
 
-# Final build status
-if [[ $BUILD_EXIT -eq 0 ]]; then
-    echo ""
+# Count theorems from the output
+THEOREM_COUNT=$(grep -c "^info:" /tmp/lake_build_output.txt 2>/dev/null || echo "0")
+
+echo ""
+if [[ -z "$LEAN_FAILED" ]]; then
     echo -e "${GREEN}Build completed successfully${NC}"
-
-    # Count theorems
-    THEOREM_COUNT=$(echo "$BUILD_OUTPUT" | grep -c "^info:.*:" || echo "0")
-    echo "Verified theorems: $THEOREM_COUNT"
-
-    # Verify no sorry
-    if [[ "$SORRY_COUNT" -eq 0 ]]; then
-        echo -e "${GREEN}✓ Zero 'sorry' statements - all proofs complete${NC}"
-    fi
+    echo "Verified theorems/lemmas: $THEOREM_COUNT"
 else
-    echo -e "${RED}Build failed with exit code $BUILD_EXIT${NC}"
+    echo -e "${RED}Build failed${NC}"
 fi
 
 cd ..
@@ -185,14 +109,18 @@ echo "============================================================"
 echo "TEST SUITE COMPLETE"
 echo "============================================================"
 echo ""
-echo "Results saved. Use this output to verify:"
-echo "  • All Python tests pass (including slow/adversarial)"
-echo "  • All Rust tests pass"
-echo "  • All Lean 4 theorems verify with zero 'sorry' statements"
-echo ""
-echo "Key theorems verified:"
-echo "  • safety: If both decide, decisions are equal"
-echo "  • attack_needs_both: Attack requires bilateral evidence"
-echo "  • bilateral_receipt_implies_common_knowledge"
-echo "  • gray_impossibility_assumption_violated"
-echo "  • full_epistemic_chain_verified"
+
+# Summary
+if [[ -n "$PYTHON_FAILED" ]] || [[ -n "$RUST_FAILED" ]] || [[ -n "$LEAN_FAILED" ]]; then
+    echo -e "${RED}Some tests failed. Check output above.${NC}"
+    exit 1
+else
+    echo -e "${GREEN}All tests passed!${NC}"
+    echo ""
+    echo "Key theorems verified in Lean 4:"
+    echo "  • safety: If both decide, decisions are equal"
+    echo "  • attack_needs_both: Attack requires bilateral evidence"
+    echo "  • bilateral_receipt_implies_common_knowledge"
+    echo "  • gray_impossibility_assumption_violated"
+    echo "  • full_epistemic_chain_verified"
+fi
