@@ -149,13 +149,20 @@
 
             <section class="theseus-test">
                 <h2>Protocol of Theseus Test</h2>
-                <p>Run multiple simulations to verify symmetric outcomes across all loss rates.</p>
+                <p>Run parallel simulations across loss rates (0% → 99.9999%) to verify symmetric outcomes.</p>
                 <div class="theseus-controls">
-                    <button id="run-theseus" class="primary">Run 100 Simulations</button>
+                    <div class="control-group">
+                        <label for="trials-per-rate">Trials per rate: <span id="trials-value">3</span></label>
+                        <input type="range" id="trials-per-rate" min="1" max="10" value="3">
+                    </div>
+                    <button id="run-theseus" class="primary">Run Protocol of Theseus</button>
                     <span id="theseus-progress"></span>
                 </div>
                 <div class="theseus-results" id="theseus-results">
                     <!-- Results will be rendered here -->
+                </div>
+                <div class="failure-details" id="failure-details" style="display: none;">
+                    <!-- Failure analysis will be shown here if asymmetric outcome occurs -->
                 </div>
             </section>
 
@@ -311,7 +318,7 @@
                 <a href="../paper/main.pdf" class="paper-link">📄 Read the Paper (PDF)</a>
                 <a href="https://github.com/riffcc/two-generals" class="github-link">🔗 View Source</a>
             </div>
-            <p class="footer-meta">&copy; 2025 Riff Labs | AGPLv3 | <em>e cinere surgemus</em></p>
+            <p class="footer-meta">&copy; 2025 Riff Labs Limited, London | AGPLv3 | <em>e cinere surgemus</em></p>
         </footer>
     </div>
 

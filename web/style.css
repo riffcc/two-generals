@@ -551,12 +551,29 @@ button:disabled {
     background: var(--bg-tertiary);
 }
 
-.theseus-cell.symmetric {
+/* Mutual ATTACK - both generals attack together (green) */
+.theseus-cell.attack {
     background: var(--accent-green);
 }
 
-.theseus-cell.asymmetric {
+/* Mutual RETREAT - both generals abort safely (light blue) */
+.theseus-cell.retreat {
+    background: #58a6ff;
+}
+
+/* Alice attacked alone - asymmetric failure (red) */
+.theseus-cell.alice-only {
     background: var(--accent-red);
+}
+
+/* Bob attacked alone - asymmetric failure (dark purple/magenta) */
+.theseus-cell.bob-only {
+    background: #a855f7;
+}
+
+/* Generic asymmetric - unknown failure mode (bright orange warning) */
+.theseus-cell.asymmetric {
+    background: #f97316;
 }
 
 .theseus-summary {
@@ -596,12 +613,25 @@ button:disabled {
     border-radius: 3px;
 }
 
-.legend-color.symmetric {
+/* Legend colors matching cell colors */
+.legend-color.pending {
+    background: var(--bg-tertiary);
+}
+
+.legend-color.attack {
     background: var(--accent-green);
 }
 
-.legend-color.asymmetric {
+.legend-color.retreat {
+    background: #58a6ff;
+}
+
+.legend-color.alice-only {
     background: var(--accent-red);
+}
+
+.legend-color.bob-only {
+    background: #a855f7;
 }
 
 .theseus-scale {
@@ -646,10 +676,50 @@ button:disabled {
     border-left: 3px solid var(--accent-purple);
 }
 
+.theseus-cell {
+    position: relative;
+}
+
 .theseus-cell:hover {
     transform: scale(1.2);
-    z-index: 10;
+    z-index: 100;
     cursor: pointer;
+}
+
+/* Custom tooltip for Theseus cells */
+.theseus-cell::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    white-space: pre-line;
+    color: var(--text-primary);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    z-index: 1000;
+    min-width: 200px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    text-align: left;
+    line-height: 1.5;
+}
+
+.theseus-cell:hover::after {
+    opacity: 1;
+}
+
+/* Position tooltip below for cells near top */
+.theseus-grid-parallel .theseus-cell:nth-child(-n+30)::after {
+    bottom: auto;
+    top: 100%;
+    margin-top: 4px;
 }
 
 /* Proof Nesting Visualization */

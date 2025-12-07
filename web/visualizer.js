@@ -216,7 +216,8 @@ class ProtocolParty {
 
         // After extracting embedded proofs, try to advance through phases!
         // This is critical for the bilateral construction property.
-        this.tryAdvanceToQuad();
+        // Capture if we advanced - this ensures UI updates even when switch cases don't trigger
+        advanced = this.tryAdvanceToQuad() || advanced;
 
         // Now process the message itself
         switch (msg.type) {
@@ -259,19 +260,31 @@ class ProtocolParty {
     /**
      * Extract embedded proofs from a Triple proof.
      * T contains D_X and D_Y, each of which contains C_X and C_Y.
+     *
+     * CRITICAL: Must check party field before setting "other" proofs!
+     * When Alice receives T_B:
+     *   - T_B.ownDouble = D_B (Bob's) ← This is "other" for Alice
+     *   - T_B.otherDouble = D_A (Alice's own) ← NOT "other" for Alice!
      */
     processEmbeddedTriple(triple) {
         if (!triple) return;
 
-        // Extract embedded doubles
+        // Extract embedded doubles, always process for commitment extraction
         if (triple.ownDouble) {
             this.processEmbeddedDouble(triple.ownDouble);
+            // If the triple is from other party, their ownDouble is their double proof
+            if (!this.otherDoubleProof && triple.ownDouble.party !== this.name) {
+                this.otherDoubleProof = triple.ownDouble;
+                this.embeddedProofs.add('D_other_from_T_own');
+            }
         }
         if (triple.otherDouble) {
             this.processEmbeddedDouble(triple.otherDouble);
-            if (!this.otherDoubleProof) {
+            // CRITICAL: Only set as other's double if it's actually from the other party!
+            // This was the bug: we were setting our own proof as "other's"
+            if (!this.otherDoubleProof && triple.otherDouble.party !== this.name) {
                 this.otherDoubleProof = triple.otherDouble;
-                this.embeddedProofs.add('D_other_from_T');
+                this.embeddedProofs.add('D_other_from_T_other');
             }
         }
 
@@ -308,6 +321,7 @@ class ProtocolParty {
 
     /**
      * Try to advance to Double phase if we have the required proofs.
+     * @returns {boolean} true if phase advanced
      */
     tryAdvanceToDouble() {
         if (this.phase === Phase.COMMITMENT && this.otherCommitment && !this.doubleProof) {
@@ -318,28 +332,22 @@ class ProtocolParty {
                 label: `D_${this.isAlice ? 'A' : 'B'}`,
                 description: 'Contains both commitments'
             });
+            return true;
         }
+        return false;
     }
 
     /**
      * Try to advance to Triple phase if we have the required proofs.
+     * @returns {boolean} true if phase advanced
      */
     tryAdvanceToTriple() {
-        // Need to be at Double and have the other's Double
-        if (this.phase === Phase.DOUBLE && this.otherDoubleProof && !this.tripleProof) {
-            this.tripleProof = this.createTripleProof();
-            this.phase = Phase.TRIPLE;
-            this.proofArtifacts.push({
-                type: 'triple',
-                label: `T_${this.isAlice ? 'A' : 'B'}`,
-                description: 'Contains both double proofs'
-            });
-        }
-        // Also check if we can skip directly from Commitment to Triple
-        // (if we received a D or T that gave us everything)
+        let didAdvance = false;
+        // First, ensure we're caught up from Commitment to Double
         if (this.phase === Phase.COMMITMENT && this.otherCommitment) {
-            this.tryAdvanceToDouble();
+            didAdvance = this.tryAdvanceToDouble() || didAdvance;
         }
+        // Now try to advance to Triple
         if (this.phase === Phase.DOUBLE && this.otherDoubleProof && !this.tripleProof) {
             this.tripleProof = this.createTripleProof();
             this.phase = Phase.TRIPLE;
@@ -348,15 +356,19 @@ class ProtocolParty {
                 label: `T_${this.isAlice ? 'A' : 'B'}`,
                 description: 'Contains both double proofs'
             });
+            didAdvance = true;
         }
+        return didAdvance;
     }
 
     /**
      * Try to advance to Quad phase if we have the required proofs.
+     * @returns {boolean} true if phase advanced
      */
     tryAdvanceToQuad() {
+        let didAdvance = false;
         // Ensure we're caught up on previous phases first
-        this.tryAdvanceToTriple();
+        didAdvance = this.tryAdvanceToTriple() || didAdvance;
 
         if (this.phase === Phase.TRIPLE && this.otherTripleProof && !this.quadProof) {
             this.quadProof = this.createQuadProof();
@@ -366,7 +378,9 @@ class ProtocolParty {
                 label: `Q_${this.isAlice ? 'A' : 'B'}`,
                 description: 'Epistemic fixpoint achieved! (Q proves mutual constructibility)'
             });
+            didAdvance = true;
         }
+        return didAdvance;
     }
 
     createDoubleProof() {
@@ -1145,6 +1159,15 @@ class UIController {
         document.getElementById('run-theseus').addEventListener('click', () => {
             this.runTheseusTest();
         });
+
+        // Trials slider
+        const trialsSlider = document.getElementById('trials-per-rate');
+        const trialsValue = document.getElementById('trials-value');
+        if (trialsSlider) {
+            trialsSlider.addEventListener('input', (e) => {
+                trialsValue.textContent = e.target.value;
+            });
+        }
     }
 
     bindSimulationEvents() {
@@ -1332,24 +1355,33 @@ class UIController {
 
     async runTheseusTest() {
         const resultsContainer = document.getElementById('theseus-results');
+        const failureDetails = document.getElementById('failure-details');
         const progress = document.getElementById('theseus-progress');
         const button = document.getElementById('run-theseus');
+        const trialsPerRate = parseInt(document.getElementById('trials-per-rate')?.value || '3');
 
         button.disabled = true;
         resultsContainer.innerHTML = '';
+        if (failureDetails) {
+            failureDetails.style.display = 'none';
+            failureDetails.innerHTML = '';
+        }
 
         // Create header with legend
         const header = document.createElement('div');
         header.className = 'theseus-header';
         header.innerHTML = `
             <div class="theseus-legend">
-                <span class="legend-item"><span class="legend-color symmetric"></span> Symmetric (Both ATTACK or ABORT)</span>
-                <span class="legend-item"><span class="legend-color asymmetric"></span> Asymmetric (FAILURE)</span>
+                <span class="legend-item"><span class="legend-color pending"></span> Pending</span>
+                <span class="legend-item"><span class="legend-color attack"></span> ATTACK (both)</span>
+                <span class="legend-item"><span class="legend-color retreat"></span> RETREAT (both)</span>
+                <span class="legend-item"><span class="legend-color alice-only"></span> Alice attacked alone</span>
+                <span class="legend-item"><span class="legend-color bob-only"></span> Bob attacked alone</span>
             </div>
             <div class="theseus-scale">
-                <span>0% loss</span>
+                <span>0%</span>
                 <span>→</span>
-                <span>98% loss</span>
+                <span>99.9999% loss</span>
             </div>
         `;
         resultsContainer.appendChild(header);
@@ -1365,59 +1397,113 @@ class UIController {
         // Extreme loss rates
         lossRates.push(99.99, 99.999, 99.9999);
 
-        const totalTests = lossRates.length;
-
-        // Create grid
+        // Create grid - always 10 columns wide for consistent aesthetics
         const grid = document.createElement('div');
-        grid.className = 'theseus-grid';
+        grid.className = 'theseus-grid-parallel';
+        grid.style.display = 'grid';
+        grid.style.gridTemplateColumns = 'repeat(10, 1fr)';
+        grid.style.gap = '2px';
         resultsContainer.appendChild(grid);
 
-        const cells = [];
-        const results = [];
-
-        // Create cells for each loss rate test
-        for (let i = 0; i < lossRates.length; i++) {
-            const cell = document.createElement('div');
-            cell.className = 'theseus-cell';
-            cell.title = `Loss rate: ${lossRates[i]}%`;
-            grid.appendChild(cell);
-            cells.push(cell);
+        // Create all cells upfront
+        const allCells = [];
+        for (let r = 0; r < lossRates.length; r++) {
+            const rowCells = [];
+            for (let t = 0; t < trialsPerRate; t++) {
+                const cell = document.createElement('div');
+                cell.className = 'theseus-cell';
+                cell.style.aspectRatio = '1';
+                cell.dataset.tooltip = `${lossRates[r]}% loss - Trial ${t + 1}\nRunning...`;
+                grid.appendChild(cell);
+                rowCells.push(cell);
+            }
+            allCells.push(rowCells);
         }
 
+        const totalTests = lossRates.length * trialsPerRate;
+        let completed = 0;
         let symmetric = 0;
         let asymmetric = 0;
+        let aborts = 0;
+        let attacks = 0;
+        const failures = [];
         let totalTicks = 0;
         let minTicks = Infinity;
         let maxTicks = 0;
 
-        for (let i = 0; i < totalTests; i++) {
-            const lossRatePercent = lossRates[i];
-            progress.textContent = `Running simulation ${i + 1}/${totalTests}... (${lossRatePercent}% loss)`;
+        // Run all simulations in parallel batches
+        const BATCH_SIZE = 5; // Run 5 loss rates in parallel
 
-            const lossRate = lossRatePercent / 100;
-            const result = await this.runSingleSimulation(lossRate);
-            results.push(result);
+        for (let batchStart = 0; batchStart < lossRates.length; batchStart += BATCH_SIZE) {
+            const batchEnd = Math.min(batchStart + BATCH_SIZE, lossRates.length);
+            const batchPromises = [];
 
-            if (result.symmetric) {
-                symmetric++;
-                cells[i].classList.add('symmetric');
-            } else {
-                asymmetric++;
-                cells[i].classList.add('asymmetric');
+            for (let r = batchStart; r < batchEnd; r++) {
+                const lossRatePercent = lossRates[r];
+                const lossRate = lossRatePercent / 100;
+
+                // Run all trials for this loss rate in parallel
+                for (let t = 0; t < trialsPerRate; t++) {
+                    const promise = this.runSingleSimulation(lossRate).then(result => {
+                        completed++;
+                        progress.textContent = `Running ${completed}/${totalTests}... (${lossRatePercent}% loss)`;
+
+                        const cell = allCells[r][t];
+
+                        if (result.symmetric) {
+                            symmetric++;
+                            if (result.outcome === 'ATTACK') {
+                                attacks++;
+                                cell.classList.add('attack');
+                            } else {
+                                aborts++;
+                                cell.classList.add('retreat');
+                            }
+                        } else {
+                            asymmetric++;
+                            // Distinguish which party attacked alone
+                            if (result.aliceDecision === 'ATTACK' && result.bobDecision !== 'ATTACK') {
+                                cell.classList.add('alice-only');
+                            } else if (result.bobDecision === 'ATTACK' && result.aliceDecision !== 'ATTACK') {
+                                cell.classList.add('bob-only');
+                            } else {
+                                cell.classList.add('asymmetric');
+                            }
+                            failures.push({
+                                lossRate: lossRatePercent,
+                                trial: t + 1,
+                                result,
+                                cell
+                            });
+                        }
+
+                        totalTicks += result.ticks;
+                        minTicks = Math.min(minTicks, result.ticks);
+                        maxTicks = Math.max(maxTicks, result.ticks);
+
+                        // Update cell tooltip with detailed stats
+                        const outcomeText = result.symmetric
+                            ? `✓ ${result.outcome} (symmetric)`
+                            : `✗ Alice:${result.aliceDecision} Bob:${result.bobDecision} (ASYMMETRIC!)`;
+                        const phaseName = (p) => ['INIT', 'C', 'D', 'T', 'Q', 'COMPLETE'][p] || '?';
+                        cell.dataset.tooltip = [
+                            `Loss Rate: ${lossRatePercent}%`,
+                            `Trial: ${t + 1}`,
+                            `Outcome: ${outcomeText}`,
+                            `Ticks: ${result.ticks.toLocaleString()}`,
+                            `Alice: Phase ${phaseName(result.alicePhase)} → ${result.aliceDecision}`,
+                            `Bob: Phase ${phaseName(result.bobPhase)} → ${result.bobDecision}`,
+                            result.fastForwarded ? '⚡ Fast-forwarded (both reached Q)' : ''
+                        ].filter(Boolean).join('\n');
+
+                        return result;
+                    });
+                    batchPromises.push(promise);
+                }
             }
 
-            totalTicks += result.ticks;
-            minTicks = Math.min(minTicks, result.ticks);
-            maxTicks = Math.max(maxTicks, result.ticks);
-
-            // Update cell tooltip with result details
-            const outcomeText = result.symmetric
-                ? `${result.aliceDecision} (symmetric)`
-                : `Alice:${result.aliceDecision} Bob:${result.bobDecision} (ASYMMETRIC!)`;
-            cells[i].title = `Loss: ${(lossRate * 100).toFixed(0)}% | Ticks: ${result.ticks} | ${outcomeText}`;
-
-            // Small delay for visual effect
-            await new Promise(r => setTimeout(r, 10));
+            // Wait for batch to complete
+            await Promise.all(batchPromises);
         }
 
         progress.textContent = '';
@@ -1425,27 +1511,84 @@ class UIController {
         // Show detailed summary
         const summary = document.createElement('div');
         summary.className = 'theseus-summary';
-        const avgTicks = (totalTicks / 100).toFixed(1);
+        const avgTicks = (totalTicks / totalTests).toFixed(1);
         summary.innerHTML = `
             <div class="summary-row">
-                <strong>Results:</strong> ${symmetric} symmetric, ${asymmetric} asymmetric
+                <strong>Results:</strong> ${attacks} ATTACK, ${aborts} RETREAT, ${asymmetric} asymmetric failures
             </div>
             <div class="summary-row">
                 <strong>Convergence:</strong> avg ${avgTicks} ticks (min: ${minTicks}, max: ${maxTicks})
             </div>
             <div class="summary-row outcome">
                 ${asymmetric === 0
-                    ? '<span class="pass">✓ Protocol of Theseus: PASSED</span><br><em>Zero asymmetric outcomes across all loss rates (0-98%)</em>'
-                    : '<span class="fail">✗ Protocol of Theseus: FAILED</span><br><em>Asymmetric outcomes detected!</em>'}
+                    ? '<span class="pass">✓ Protocol of Theseus: PASSED</span><br><em>Zero asymmetric outcomes across ' + totalTests + ' trials (0% → 99.9999% loss)</em>'
+                    : '<span class="fail">✗ Protocol of Theseus: FAILED</span><br><em>' + asymmetric + ' asymmetric outcome(s) detected - see analysis below</em>'}
             </div>
             <div class="summary-row insight">
-                <strong>Key Insight:</strong> Even at 98% packet loss, the protocol achieves symmetric outcomes.<br>
-                The bilateral construction property guarantees: if Alice can construct Q, Bob can too.
+                <strong>Key Insight:</strong> With 10M tick deadline and proof embedding, the bilateral construction<br>
+                property guarantees symmetric outcomes. Any failure indicates a simulation bug, not protocol failure.
             </div>
         `;
         resultsContainer.appendChild(summary);
 
+        // Show failure analysis if any asymmetric outcomes
+        if (failures.length > 0 && failureDetails) {
+            failureDetails.style.display = 'block';
+            failureDetails.innerHTML = `
+                <h3>⚠️ Asymmetric Failure Analysis</h3>
+                <p>The following trials produced asymmetric outcomes. This should be IMPOSSIBLE with a correct implementation.</p>
+                <div class="failure-list">
+                    ${failures.map(f => `
+                        <div class="failure-item">
+                            <strong>${f.lossRate}% loss - Trial ${f.trial}</strong>
+                            <ul>
+                                <li>Alice: Phase ${f.result.alicePhase} → Decision: ${f.result.aliceDecision}</li>
+                                <li>Bob: Phase ${f.result.bobPhase} → Decision: ${f.result.bobDecision}</li>
+                                <li>Ticks: ${f.result.ticks} / 10,000,000</li>
+                                <li>Fast-forwarded: ${f.result.fastForwarded ? 'Yes' : 'No'}</li>
+                            </ul>
+                            <p class="failure-analysis">
+                                ${this.analyzeFailure(f.result)}
+                            </p>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
         button.disabled = false;
+    }
+
+    /**
+     * Analyze why an asymmetric outcome occurred.
+     * This should NEVER happen with correct protocol implementation.
+     */
+    analyzeFailure(result) {
+        const { alicePhase, bobPhase, aliceDecision, bobDecision, ticks } = result;
+
+        if (aliceDecision === 'ATTACK' && bobDecision === 'ABORT') {
+            if (alicePhase >= 4 && bobPhase < 4) {
+                return `BUG: Alice reached QUAD (phase ${alicePhase}) but Bob stuck at phase ${bobPhase}. ` +
+                       `This violates bilateral construction - if Alice has Q_A, she must have T_B, ` +
+                       `which means Bob reached TRIPLE and could construct Q_B. Check proof embedding logic.`;
+            }
+        }
+
+        if (bobDecision === 'ATTACK' && aliceDecision === 'ABORT') {
+            if (bobPhase >= 4 && alicePhase < 4) {
+                return `BUG: Bob reached QUAD (phase ${bobPhase}) but Alice stuck at phase ${alicePhase}. ` +
+                       `This violates bilateral construction - if Bob has Q_B, he must have T_A, ` +
+                       `which means Alice reached TRIPLE and could construct Q_A. Check proof embedding logic.`;
+            }
+        }
+
+        if (ticks >= 10000000) {
+            return `Deadline reached (10M ticks). Both parties should ABORT symmetrically, ` +
+                   `but got Alice:${aliceDecision} Bob:${bobDecision}. Check getDecision() logic.`;
+        }
+
+        return `Unknown failure mode. Alice: phase ${alicePhase} → ${aliceDecision}, ` +
+               `Bob: phase ${bobPhase} → ${bobDecision}. Investigate simulation state.`;
     }
 
     /**
@@ -1468,9 +1611,8 @@ class UIController {
 
             let ticks = 0;
             // Model: 1000 msgs/sec for 18 hours = 64,800,000 attempts
-            // For browser sim, we scale: each tick = 6480 real attempts
-            // So 10,000 ticks = 64.8M attempts (full 18-hour window)
-            const maxTicks = 10000;
+            // 10M ticks with batching gives plenty of margin for extreme loss rates
+            const maxTicks = 10000000;
 
             // Run synchronously in batches for SPEED
             const BATCH_SIZE = 100; // Process 100 ticks at a time
