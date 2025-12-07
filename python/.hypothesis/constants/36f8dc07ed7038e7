@@ -1,0 +1,4 @@
+# file: /tmp/tgp-test-venv/bin/pytest
+# hypothesis_version: 6.148.7
+
+['.exe', '__main__']

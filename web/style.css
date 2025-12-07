@@ -484,6 +484,130 @@ button:disabled {
     font-size: 0.9rem;
 }
 
+.theseus-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.theseus-legend {
+    display: flex;
+    gap: 1.5rem;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.legend-color {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+}
+
+.legend-color.symmetric {
+    background: var(--accent-green);
+}
+
+.legend-color.asymmetric {
+    background: var(--accent-red);
+}
+
+.theseus-scale {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.summary-row {
+    margin-bottom: 0.75rem;
+    line-height: 1.5;
+}
+
+.summary-row.outcome {
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 6px;
+    margin-top: 1rem;
+}
+
+.summary-row.outcome .pass {
+    color: var(--accent-green);
+    font-size: 1.1rem;
+}
+
+.summary-row.outcome .fail {
+    color: var(--accent-red);
+    font-size: 1.1rem;
+}
+
+.summary-row.outcome em {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.summary-row.insight {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    background: linear-gradient(135deg, rgba(88, 166, 255, 0.1), rgba(63, 185, 80, 0.1));
+    border-radius: 6px;
+    border-left: 3px solid var(--accent-purple);
+}
+
+.theseus-cell:hover {
+    transform: scale(1.2);
+    z-index: 10;
+    cursor: pointer;
+}
+
+/* Proof Nesting Visualization */
+.proof-nesting {
+    margin-bottom: 3rem;
+}
+
+.proof-nesting h2 {
+    font-size: 1.3rem;
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+.section-description {
+    text-align: center;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+}
+
+.nesting-diagram {
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    padding: 1rem;
+}
+
+#nesting-svg {
+    width: 100%;
+    height: 400px;
+}
+
+.proof-formula {
+    display: block;
+    margin-top: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-primary);
+    border-radius: 4px;
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--accent-purple);
+}
+
 /* Explanation */
 .explanation {
     margin-bottom: 3rem;
@@ -561,6 +685,23 @@ footer em {
 
 .packet.lost {
     opacity: 0.2;
+}
+
+/* Engine Indicator */
+.engine-indicator {
+    padding: 0.5rem 1rem;
+    background: var(--bg-tertiary);
+    border-radius: 6px;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+}
+
+.engine-indicator .wasm {
+    color: var(--accent-red);
+}
+
+.engine-indicator .js {
+    color: var(--accent-yellow);
 }
 
 /* Responsive */

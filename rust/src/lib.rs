@@ -46,11 +46,13 @@
 #[cfg(feature = "no_std")]
 extern crate alloc;
 
+pub mod bft;
 pub mod crypto;
 pub mod error;
 pub mod protocol;
 pub mod types;
 
+pub use bft::{Arbitrator, ArbitratorPhase, BftCommit, BftConfig, BftConsensus, BftMessage, BftMessageType, BftProposal, BftShare, BlsKeyPair, BlsPublicKey, ThresholdScheme, ThresholdSignature};
 pub use crypto::{KeyPair, PublicKey, Signature, Signer, Verifier};
 pub use error::{Error, Result};
 pub use protocol::{run_protocol_simulation, ProtocolState, TwoGenerals};

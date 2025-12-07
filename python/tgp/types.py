@@ -330,3 +330,244 @@ class BilateralReceipt:
 
     def __repr__(self) -> str:
         return f"BilateralReceipt(alice={self.alice_quad}, bob={self.bob_quad})"
+
+
+# =============================================================================
+# FULL SOLVE: Extended Protocol Types (V3)
+# =============================================================================
+#
+# The C→D→T→Q protocol above provides the epistemic ladder. The types below
+# complete the FULL SOLVE by adding mutual observation of readiness.
+#
+# Key insight: We don't just need to construct Q - we need to OBSERVE that
+# our counterparty has ALSO constructed Q and is ready to proceed.
+#
+# Protocol extension:
+#   Phase 5: Q_CONF = "I have constructed Q" (flood after constructing Q)
+#   Phase 6: Q_CONF_FINAL = "I received your Q_CONF, I'm locked in"
+#   Decision: Need Q + partner's Q_CONF_FINAL
+#
+# This eliminates the last edge case: both parties OBSERVE each other's
+# transition from Q_CONF to Q_CONF_FINAL before deciding.
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class QuadConfirmation:
+    """
+    Phase 5: Q_CONF_X = Sign_X(Q_X || "I have constructed my quad proof")
+
+    Confirms that this party has successfully constructed their QuadProof.
+    Flooded after constructing Q to signal completion of the epistemic ladder.
+
+    This is the "I'm ready" signal - but we can't ATTACK yet until we see
+    the counterparty's Q_CONF_FINAL (proving they received our Q_CONF).
+
+    Contains the full epistemic ladder (stapled proofs):
+    - Own QuadProof (which contains all lower proofs)
+    - Proof that we have the counterparty's TripleProof
+    """
+    party: Party
+    own_quad: QuadProof
+    confirmation_hash: bytes  # Hash proving all components present
+    signature: bytes
+    public_key: bytes
+
+    def canonical_bytes(self) -> bytes:
+        """Serialize to canonical bytes."""
+        return (
+            b"Q_CONF|" +
+            self.party.name.encode() +
+            b"|" +
+            self.own_quad.canonical_bytes() +
+            b"|" +
+            self.confirmation_hash +
+            b"|" +
+            self.signature +
+            b"|" +
+            self.public_key
+        )
+
+    def hash(self) -> bytes:
+        """SHA-256 hash of canonical representation."""
+        return hashlib.sha256(self.canonical_bytes()).digest()
+
+    def message_to_sign(self) -> bytes:
+        """The message that was signed to create this confirmation."""
+        return (
+            self.own_quad.canonical_bytes() +
+            b"||" +
+            self.confirmation_hash +
+            b"||Q_CONFIRMATION"
+        )
+
+
+@dataclass(frozen=True)
+class QuadConfirmationFinal:
+    """
+    Phase 6: Q_CONF_FINAL_X = Sign_X(Q_CONF_X || Q_CONF_Y || "Mutually locked in")
+
+    The FINAL confirmation proving mutual readiness:
+    - "I have constructed my Q"
+    - "I have received YOUR Q_CONF"
+    - "I am now LOCKED IN to ATTACK"
+
+    CRITICAL: This is what the counterparty OBSERVES to know we're ready.
+    When you see partner's Q_CONF_FINAL, you know:
+      1. Partner has their Q (from their Q_CONF)
+      2. Partner has YOUR Q_CONF (required to create Q_CONF_FINAL)
+      3. Partner is locked in - they WILL attack
+
+    The "behavior change" from Q_CONF → Q_CONF_FINAL is the observable
+    signal that mutual knowledge has been achieved.
+    """
+    party: Party
+    own_quad_conf: QuadConfirmation
+    other_quad_conf: QuadConfirmation
+    ready_to_attack: bool  # Always True when this exists
+    signature: bytes
+    public_key: bytes
+
+    def canonical_bytes(self) -> bytes:
+        """Serialize to canonical bytes."""
+        return (
+            b"Q_CONF_FINAL|" +
+            self.party.name.encode() +
+            b"|" +
+            self.own_quad_conf.canonical_bytes() +
+            b"|" +
+            self.other_quad_conf.canonical_bytes() +
+            b"|" +
+            (b"READY" if self.ready_to_attack else b"NOT_READY") +
+            b"|" +
+            self.signature +
+            b"|" +
+            self.public_key
+        )
+
+    def hash(self) -> bytes:
+        """SHA-256 hash of canonical representation."""
+        return hashlib.sha256(self.canonical_bytes()).digest()
+
+    def message_to_sign(self) -> bytes:
+        """The message that was signed to create this final confirmation."""
+        return (
+            self.own_quad_conf.canonical_bytes() +
+            b"||" +
+            self.other_quad_conf.canonical_bytes() +
+            b"||MUTUALLY_LOCKED_IN"
+        )
+
+
+@dataclass(frozen=True)
+class FinalReceipt:
+    """
+    The COMPLETE bilateral receipt with mutual confirmation.
+
+    This is the FULL SOLVE artifact. It contains:
+    - Both QuadProofs (Q_A, Q_B)
+    - Both QuadConfirmations (Q_CONF_A, Q_CONF_B)
+    - Both QuadConfirmationFinals (Q_CONF_FINAL_A, Q_CONF_FINAL_B)
+
+    STRUCTURAL GUARANTEE:
+    - FinalReceipt exists → both parties sent Q_CONF_FINAL
+    - Q_CONF_FINAL_X exists → X has Y's Q_CONF
+    - Q_CONF_X exists → X has Q_X
+    - Therefore: BOTH parties have Q, BOTH are locked in, BOTH will ATTACK
+
+    This is constructed PURELY LOCALLY after receiving partner's Q_CONF_FINAL.
+    No network messages after Q_CONF_FINAL - the decision is deterministic.
+    """
+    # The bilateral quad proofs
+    alice_quad: QuadProof
+    bob_quad: QuadProof
+
+    # The mutual confirmations
+    alice_conf: QuadConfirmation
+    bob_conf: QuadConfirmation
+
+    # The final lock-in (proves mutual observation)
+    alice_conf_final: QuadConfirmationFinal
+    bob_conf_final: QuadConfirmationFinal
+
+    # The deterministic receipt hash (identical for both parties)
+    receipt_hash: bytes
+
+    def is_complete(self) -> bool:
+        """Verify all components are present."""
+        return all([
+            self.alice_quad,
+            self.bob_quad,
+            self.alice_conf,
+            self.bob_conf,
+            self.alice_conf_final,
+            self.bob_conf_final,
+            self.receipt_hash,
+        ])
+
+    def is_valid_fixpoint(self) -> bool:
+        """
+        Verify this is a valid epistemic fixpoint with mutual observation.
+
+        The FULL SOLVE guarantee:
+        - Both quads reference each other's triples (from C→D→T→Q)
+        - Both conf_finals reference each other's confs (mutual observation)
+        """
+        # Basic quad structure
+        alice_has_bob_triple = self.alice_quad.other_triple.party == Party.BOB
+        bob_has_alice_triple = self.bob_quad.other_triple.party == Party.ALICE
+
+        # Mutual confirmation structure
+        alice_has_bob_conf = self.alice_conf_final.other_quad_conf.party == Party.BOB
+        bob_has_alice_conf = self.bob_conf_final.other_quad_conf.party == Party.ALICE
+
+        return all([
+            alice_has_bob_triple,
+            bob_has_alice_triple,
+            alice_has_bob_conf,
+            bob_has_alice_conf,
+        ])
+
+    @staticmethod
+    def compute_receipt_hash(
+        alice_conf_final: QuadConfirmationFinal,
+        bob_conf_final: QuadConfirmationFinal,
+    ) -> bytes:
+        """
+        Compute the deterministic receipt hash.
+
+        CRITICAL: This hash is IDENTICAL for both parties because it's
+        computed from the same inputs (both Q_CONF_FINALs) in sorted order.
+        """
+        # Sort by party name for deterministic ordering
+        confs = sorted(
+            [alice_conf_final.hash(), bob_conf_final.hash()]
+        )
+        return hashlib.sha256(
+            confs[0] + confs[1] + b"FINAL_RECEIPT"
+        ).digest()
+
+    def __repr__(self) -> str:
+        return f"FinalReceipt(hash={self.receipt_hash.hex()[:16]}...)"
+
+
+# Extended protocol phases for FULL SOLVE
+class ProtocolPhaseV3(Enum):
+    """
+    Protocol phases for the FULL SOLVE (V3).
+
+    Extends the basic C→D→T→Q with confirmation phases:
+      INIT → COMMITMENT → DOUBLE → TRIPLE → QUAD → Q_CONF → Q_CONF_FINAL → COMPLETE
+
+    The key addition is the two confirmation phases which ensure
+    mutual observation of readiness before the final decision.
+    """
+    INIT = 0           # Before commitment
+    COMMITMENT = 1     # Flooding C_X
+    DOUBLE = 2         # Flooding D_X
+    TRIPLE = 3         # Flooding T_X
+    QUAD = 4           # Flooding Q_X
+    Q_CONF = 5         # Flooding Q_CONF_X (have Q, waiting for partner's Q_CONF)
+    Q_CONF_FINAL = 6   # Flooding Q_CONF_FINAL_X (have partner's Q_CONF, locked in)
+    COMPLETE = 7       # Mutual lock-in achieved - can ATTACK
+    ABORTED = 8        # Deadline expired without mutual lock-in

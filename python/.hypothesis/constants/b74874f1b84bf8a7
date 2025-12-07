@@ -1,0 +1,4 @@
+# file: /mnt/castle/garage/two-generals-public/python/tgp/types.py
+# hypothesis_version: 6.148.7
+
+[b'DOUBLE|', b'QUAD|', b'TRIPLE|', b'|', b'||', b'||BOTH_COMMITTED', b'||BOTH_HAVE_DOUBLE', b'||FIXPOINT_ACHIEVED']

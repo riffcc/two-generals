@@ -1,0 +1,195 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tgp"
+version = "0.1.0"
+description = "Two Generals Protocol - A deterministically failsafe solution to the Coordinated Attack Problem"
+readme = "../README.md"
+license = "AGPL-3.0-or-later"
+authors = [
+    { name = "Riff Labs", email = "wings@riff.cc" }
+]
+keywords = [
+    "distributed-systems",
+    "consensus",
+    "byzantine-fault-tolerance",
+    "cryptography",
+    "two-generals-problem",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Topic :: System :: Distributed Computing",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
+requires-python = ">=3.10"
+dependencies = [
+    # Core cryptography (Ed25519, X25519, ChaCha20-Poly1305, HKDF)
+    "cryptography>=41.0.0",
+    # Serialization
+    "cbor2>=5.6.0",
+    "msgpack>=1.0.7",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-benchmark>=4.0.0",
+    "hypothesis>=6.88.0",
+    # Type checking
+    "mypy>=1.7.0",
+    # Code formatting
+    "black>=23.11.0",
+    "isort>=5.12.0",
+    # Linting
+    "ruff>=0.1.0",
+    # Pre-commit hooks
+    "pre-commit>=3.6.0",
+]
+benchmark = [
+    "rich>=13.7.0",
+    "typer>=0.9.0",
+]
+all = ["tgp[dev,benchmark]"]
+
+[project.urls]
+Homepage = "https://github.com/riff-labs/two-generals-public"
+Documentation = "https://github.com/riff-labs/two-generals-public#readme"
+Repository = "https://github.com/riff-labs/two-generals-public.git"
+Issues = "https://github.com/riff-labs/two-generals-public/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tgp"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "tgp/",
+    "tests/",
+    "pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+    "-ra",
+    "-q",
+    "--strict-markers",
+    "--strict-config",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+]
+filterwarnings = [
+    "error",
+    "ignore::DeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["tgp"]
+branch = true
+parallel = true
+omit = [
+    "tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+show_missing = true
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+show_error_codes = true
+no_implicit_optional = true
+files = ["tgp"]
+
+[[tool.mypy.overrides]]
+module = [
+    "cryptography.*",
+    "cbor2.*",
+    "msgpack.*",
+]
+ignore_missing_imports = true
+
+[tool.black]
+line-length = 88
+target-version = ["py310", "py311", "py312"]
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | __pycache__
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+known_first_party = ["tgp"]
+skip_gitignore = true
+force_single_line = false
+lines_after_imports = 2
+
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+    "ARG", # flake8-unused-arguments
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+    "ARG001", # unused function argument (common in protocols)
+]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["ARG001", "S101"]

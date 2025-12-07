@@ -131,29 +131,42 @@
                 </div>
             </section>
 
+            <section class="proof-nesting">
+                <h2>Proof Nesting Visualization</h2>
+                <p class="section-description">Each proof level embeds the previous, creating self-certifying artifacts</p>
+                <div class="nesting-diagram" id="nesting-diagram">
+                    <svg id="nesting-svg" viewBox="0 0 800 400"></svg>
+                </div>
+            </section>
+
             <section class="explanation">
                 <h2>How It Works</h2>
                 <div class="explainer">
                     <div class="step">
                         <h4>Phase 1: Commitment (C)</h4>
                         <p>Each party generates and floods a signed commitment: "I will attack if you agree"</p>
+                        <code class="proof-formula">C_X = Sign_X("I will attack at dawn if you agree")</code>
                     </div>
                     <div class="step">
                         <h4>Phase 2: Double Proof (D)</h4>
-                        <p>Upon receiving counterparty's C, construct D = Sign(C_mine + C_theirs + "Both committed")</p>
+                        <p>Upon receiving counterparty's C, construct D embedding both commitments</p>
+                        <code class="proof-formula">D_X = Sign_X(C_X ∥ C_Y ∥ "Both committed")</code>
                     </div>
                     <div class="step">
                         <h4>Phase 3: Triple Proof (T)</h4>
-                        <p>Upon receiving D, construct T = Sign(D_mine + D_theirs + "Both have double proofs")</p>
+                        <p>Upon receiving D, construct T containing all prior proofs</p>
+                        <code class="proof-formula">T_X = Sign_X(D_X ∥ D_Y ∥ "Both have doubles")</code>
                     </div>
                     <div class="step">
                         <h4>Phase 4: Quaternary Fixpoint (Q)</h4>
-                        <p>Upon receiving T, construct Q - the bilateral receipt pair that proves mutual constructibility</p>
+                        <p>The bilateral receipt pair that proves mutual constructibility</p>
+                        <code class="proof-formula">Q_X = Sign_X(T_X ∥ T_Y ∥ "Fixpoint achieved")</code>
                     </div>
                 </div>
                 <div class="key-insight">
-                    <strong>Key Insight:</strong> Q_A exists implies Q_B is constructible.
-                    The artifact IS the proof. No infinite regress required.
+                    <strong>🔗 The Bilateral Construction Property:</strong><br>
+                    Q_A exists → contains T_B → Bob had D_A → Bob can construct T_B → Bob can construct Q_B<br>
+                    <em>Each half cryptographically proves the other half is constructible.</em>
                 </div>
             </section>
         </main>

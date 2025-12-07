@@ -1,0 +1,4 @@
+# file: /mnt/castle/garage/two-generals-public/python/tgp/protocol.py
+# hypothesis_version: 6.148.7
+
+[b'Both parties committed', b'Both parties have double proofs', b'Fixpoint achieved', b'I will attack at dawn if you agree', 100]

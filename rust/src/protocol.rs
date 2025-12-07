@@ -784,4 +784,236 @@ mod tests {
         assert!(alice.is_complete());
         assert!(bob.is_complete());
     }
+
+    // =========================================================================
+    // Protocol of Theseus Tests
+    // =========================================================================
+    // These tests verify that outcomes are ALWAYS symmetric regardless of
+    // packet loss patterns. If you remove any subset of messages, both parties
+    // either ATTACK together or ABORT together - never asymmetric.
+
+    #[test]
+    fn lossy_channel_50_percent_loss_symmetric_outcome() {
+        use rand::{SeedableRng, Rng};
+        use rand::rngs::StdRng;
+
+        let mut successes = 0;
+        let mut aborts = 0;
+        let mut asymmetric = 0;
+
+        // Run 100 simulations with 50% packet loss
+        for seed in 0..100u64 {
+            let mut rng = StdRng::seed_from_u64(seed);
+            let alice_kp = KeyPair::generate();
+            let bob_kp = KeyPair::generate();
+
+            let (alice, bob) = run_protocol_simulation(
+                alice_kp,
+                bob_kp,
+                1000, // Allow enough rounds for lossy channel
+                |_msg| rng.gen_bool(0.5), // 50% delivery rate
+            );
+
+            let alice_can = alice.can_attack();
+            let bob_can = bob.can_attack();
+
+            if alice_can && bob_can {
+                successes += 1;
+            } else if !alice_can && !bob_can {
+                aborts += 1;
+            } else {
+                asymmetric += 1;
+            }
+        }
+
+        // The protocol MUST never produce asymmetric outcomes
+        assert_eq!(asymmetric, 0, "Protocol produced {} asymmetric outcomes!", asymmetric);
+
+        // At 50% loss over 1000 rounds, we should see mostly successes
+        assert!(successes > 50, "Expected more successes at 50% loss, got {}", successes);
+    }
+
+    #[test]
+    fn lossy_channel_90_percent_loss_symmetric_outcome() {
+        use rand::{SeedableRng, Rng};
+        use rand::rngs::StdRng;
+
+        let mut successes = 0;
+        let mut aborts = 0;
+        let mut asymmetric = 0;
+
+        // Run 50 simulations with 90% packet loss
+        for seed in 0..50u64 {
+            let mut rng = StdRng::seed_from_u64(seed);
+            let alice_kp = KeyPair::generate();
+            let bob_kp = KeyPair::generate();
+
+            let (alice, bob) = run_protocol_simulation(
+                alice_kp,
+                bob_kp,
+                5000, // More rounds needed at higher loss
+                |_msg| rng.gen_bool(0.1), // 10% delivery rate (90% loss)
+            );
+
+            let alice_can = alice.can_attack();
+            let bob_can = bob.can_attack();
+
+            if alice_can && bob_can {
+                successes += 1;
+            } else if !alice_can && !bob_can {
+                aborts += 1;
+            } else {
+                asymmetric += 1;
+            }
+        }
+
+        // The protocol MUST never produce asymmetric outcomes
+        assert_eq!(asymmetric, 0, "Protocol produced {} asymmetric outcomes!", asymmetric);
+    }
+
+    #[test]
+    fn asymmetric_loss_still_symmetric_outcome() {
+        use rand::{SeedableRng, Rng};
+        use rand::rngs::StdRng;
+
+        // Test with asymmetric loss: Alice->Bob has 80% loss, Bob->Alice has 20% loss
+        let mut asymmetric = 0;
+
+        for seed in 0..50u64 {
+            let mut rng = StdRng::seed_from_u64(seed);
+            let alice_kp = KeyPair::generate();
+            let bob_kp = KeyPair::generate();
+
+            let (alice, bob) = run_protocol_simulation(
+                alice_kp,
+                bob_kp,
+                2000,
+                |msg| {
+                    // Asymmetric loss based on sender
+                    if msg.sender == Party::Alice {
+                        rng.gen_bool(0.2) // 20% delivery (80% loss) A->B
+                    } else {
+                        rng.gen_bool(0.8) // 80% delivery (20% loss) B->A
+                    }
+                },
+            );
+
+            let alice_can = alice.can_attack();
+            let bob_can = bob.can_attack();
+
+            if alice_can != bob_can {
+                asymmetric += 1;
+            }
+        }
+
+        // The protocol MUST never produce asymmetric outcomes
+        // even with asymmetric loss patterns
+        assert_eq!(asymmetric, 0, "Protocol produced {} asymmetric outcomes!", asymmetric);
+    }
+
+    #[test]
+    fn burst_loss_symmetric_outcome() {
+        use rand::{SeedableRng, Rng};
+        use rand::rngs::StdRng;
+
+        // Test with burst loss: periods of 100% loss followed by perfect delivery
+        let mut asymmetric = 0;
+
+        for seed in 0..50u64 {
+            let mut rng = StdRng::seed_from_u64(seed);
+            let alice_kp = KeyPair::generate();
+            let bob_kp = KeyPair::generate();
+
+            let mut msg_count = 0u64;
+
+            let (alice, bob) = run_protocol_simulation(
+                alice_kp,
+                bob_kp,
+                500,
+                |_msg| {
+                    msg_count += 1;
+                    // Burst pattern: 10 messages lost, then 5 delivered
+                    (msg_count % 15) >= 10
+                },
+            );
+
+            let alice_can = alice.can_attack();
+            let bob_can = bob.can_attack();
+
+            if alice_can != bob_can {
+                asymmetric += 1;
+            }
+        }
+
+        assert_eq!(asymmetric, 0, "Protocol produced {} asymmetric outcomes!", asymmetric);
+    }
+
+    #[test]
+    fn custom_commitment_message() {
+        let alice_kp = KeyPair::generate();
+        let bob_kp = KeyPair::generate();
+
+        let custom_msg = b"Attack at midnight with 1000 troops".to_vec();
+
+        let mut alice = TwoGenerals::with_commitment_message(
+            Party::Alice,
+            alice_kp.clone(),
+            bob_kp.public_key().clone(),
+            custom_msg.clone(),
+        );
+        let mut bob = TwoGenerals::with_commitment_message(
+            Party::Bob,
+            bob_kp,
+            alice_kp.public_key().clone(),
+            custom_msg,
+        );
+
+        // Run to completion
+        for _ in 0..20 {
+            for msg in alice.get_messages_to_send() {
+                bob.receive(&msg).unwrap();
+            }
+            for msg in bob.get_messages_to_send() {
+                alice.receive(&msg).unwrap();
+            }
+
+            if alice.is_complete() && bob.is_complete() {
+                break;
+            }
+        }
+
+        assert!(alice.is_complete());
+        assert!(bob.is_complete());
+    }
+
+    #[test]
+    fn get_decision_pending_returns_abort() {
+        let alice_kp = KeyPair::generate();
+        let bob_kp = KeyPair::generate();
+
+        let alice = TwoGenerals::new(
+            Party::Alice,
+            alice_kp,
+            bob_kp.public_key().clone(),
+        );
+
+        // Before completion, decision should be Abort (safe default)
+        assert!(matches!(alice.get_decision(), Decision::Abort));
+    }
+
+    #[test]
+    fn twogenerals_debug() {
+        let alice_kp = KeyPair::generate();
+        let bob_kp = KeyPair::generate();
+
+        let alice = TwoGenerals::new(
+            Party::Alice,
+            alice_kp,
+            bob_kp.public_key().clone(),
+        );
+
+        let debug_str = format!("{:?}", alice);
+        assert!(debug_str.contains("TwoGenerals"));
+        assert!(debug_str.contains("party: Alice"));
+    }
 }

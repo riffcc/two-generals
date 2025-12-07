@@ -1,20 +1,25 @@
-# Include base requirements
+# Development dependencies for Two Generals Protocol
+# For full dependency management, use: pip install -e ".[dev]"
+# This file is provided for pip-tools compatibility
+
 -r requirements.txt
 
-# Development tools
-pre-commit>=3.6.0
+# Testing
+pytest>=7.4.0
 pytest-cov>=4.1.0
 pytest-asyncio>=0.21.0
 pytest-benchmark>=4.0.0
+hypothesis>=6.88.0
 
 # Type checking
 mypy>=1.7.0
-types-requests>=2.31.0
 
 # Code formatting
 black>=23.11.0
 isort>=5.12.0
 
 # Linting
-flake8>=6.1.0
-pydocstyle>=6.3.0
+ruff>=0.1.0
+
+# Pre-commit hooks
+pre-commit>=3.6.0

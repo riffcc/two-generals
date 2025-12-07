@@ -1,0 +1,4 @@
+# file: /mnt/castle/garage/two-generals-public/python/tgp/network.py
+# hypothesis_version: 6.148.7
+
+[0.0, 0.1, 1.0, 1.5, 5.0, 10.0, 100, 1024, '>BI', 'Channel is closed', 'Transport is closed', 'UDPProtocol']

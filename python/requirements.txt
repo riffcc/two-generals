@@ -1,21 +1,10 @@
-# Core cryptography
-ed25519>=1.5.0
-x25519>=0.7.0
-blake3>=0.4.0
+# Core dependencies for Two Generals Protocol
+# Note: Use `pip install -e .` for development installs
+# This file is provided for pip-tools compatibility
+
+# Core cryptography (Ed25519, X25519, ChaCha20-Poly1305, HKDF)
+cryptography>=41.0.0
 
 # Serialization
 cbor2>=5.6.0
 msgpack>=1.0.7
-
-# Testing
-pytest>=7.4.0
-hypothesis>=6.88.0
-
-# Development (optional)
-mypy>=1.7.0
-black>=23.11.0
-flake8>=6.1.0
-
-# Benchmarks
-rich>=13.7.0
-typer>=0.9.0

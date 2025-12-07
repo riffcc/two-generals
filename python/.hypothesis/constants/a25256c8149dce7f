@@ -1,0 +1,4 @@
+# file: /mnt/castle/garage/two-generals-public/python/tgp/crypto.py
+# hypothesis_version: 6.148.7
+
+[b'\x00', b'\x01', b'TGP-ENCRYPT-V1', b'TGP-MAC-V1', b'TGP-SESSION-KEY-V1', 128, 'DHKeyPair', 'DHPublicKey', 'DHSession', 'KeyPair', 'PublicKey', 'SessionKeys', 'little', 'public_key']

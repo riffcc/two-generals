@@ -514,4 +514,116 @@ mod tests {
             .verify_quad_proof(&sig, own_triple, other_triple)
             .is_ok());
     }
+
+    #[test]
+    fn public_key_from_bytes_valid() {
+        let kp = KeyPair::generate();
+        let bytes = kp.public_key().as_bytes();
+        let pk = PublicKey::from_bytes(bytes).unwrap();
+        assert_eq!(pk.as_bytes(), bytes);
+    }
+
+    #[test]
+    fn public_key_from_bytes_wrong_length() {
+        let short = [0u8; 16];
+        assert!(PublicKey::from_bytes(&short).is_err());
+
+        let long = [0u8; 64];
+        assert!(PublicKey::from_bytes(&long).is_err());
+    }
+
+    #[test]
+    fn public_key_roundtrip() {
+        // Verify that a valid public key can be serialized and deserialized
+        let kp = KeyPair::generate();
+        let pk_bytes = kp.public_key().as_bytes();
+        let pk2 = PublicKey::from_bytes(pk_bytes).unwrap();
+        assert_eq!(kp.public_key().as_bytes(), pk2.as_bytes());
+    }
+
+    #[test]
+    fn signature_from_bytes_valid() {
+        let kp = KeyPair::generate();
+        let sig = kp.sign(b"test");
+        let bytes = sig.as_bytes();
+        let sig2 = Signature::from_bytes(bytes).unwrap();
+        assert_eq!(sig2.as_bytes(), bytes);
+    }
+
+    #[test]
+    fn signature_from_bytes_wrong_length() {
+        let short = [0u8; 32];
+        assert!(Signature::from_bytes(&short).is_err());
+
+        let long = [0u8; 128];
+        assert!(Signature::from_bytes(&long).is_err());
+    }
+
+    #[test]
+    fn keypair_from_seed_invalid_length() {
+        let short = [0u8; 16];
+        assert!(KeyPair::from_seed(&short).is_err());
+
+        let long = [0u8; 64];
+        assert!(KeyPair::from_seed(&long).is_err());
+    }
+
+    #[test]
+    fn keypair_clone() {
+        let kp1 = KeyPair::generate();
+        let kp2 = kp1.clone();
+        assert_eq!(kp1.public_key().as_bytes(), kp2.public_key().as_bytes());
+
+        // Both can sign and produce valid signatures
+        let msg = b"test message";
+        let sig1 = kp1.sign(msg);
+        let sig2 = kp2.sign(msg);
+        assert!(kp1.verify(msg, &sig1).is_ok());
+        assert!(kp2.verify(msg, &sig2).is_ok());
+    }
+
+    #[test]
+    fn keypair_debug() {
+        let kp = KeyPair::generate();
+        let debug_str = format!("{:?}", kp);
+        assert!(debug_str.contains("KeyPair"));
+        assert!(debug_str.contains("public="));
+    }
+
+    #[test]
+    fn public_key_display() {
+        let kp = KeyPair::generate();
+        let display_str = format!("{}", kp.public_key());
+        assert_eq!(display_str.len(), 64); // 32 bytes = 64 hex chars
+    }
+
+    #[test]
+    fn signature_debug() {
+        let kp = KeyPair::generate();
+        let sig = kp.sign(b"test");
+        let debug_str = format!("{:?}", sig);
+        assert!(debug_str.contains("Signature"));
+    }
+
+    #[test]
+    fn signer_public_key() {
+        let kp = KeyPair::generate();
+        let signer = Signer::new(kp.clone());
+        assert_eq!(signer.public_key().as_bytes(), kp.public_key().as_bytes());
+    }
+
+    #[test]
+    fn empty_message_sign_verify() {
+        let kp = KeyPair::generate();
+        let sig = kp.sign(b"");
+        assert!(kp.verify(b"", &sig).is_ok());
+    }
+
+    #[test]
+    fn large_message_sign_verify() {
+        let kp = KeyPair::generate();
+        let large_msg = vec![0x42u8; 1_000_000]; // 1MB message
+        let sig = kp.sign(&large_msg);
+        assert!(kp.verify(&large_msg, &sig).is_ok());
+    }
 }

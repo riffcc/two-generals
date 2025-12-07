@@ -1,0 +1,4 @@
+# file: /mnt/castle/garage/two-generals-public/python/tgp/bft.py
+# hypothesis_version: 6.148.7
+
+[b'BLS_PUB', b'PROPOSE', b'SHARE', '>I', '>Q', 'Arbitrator', 'ArbitratorPhase', 'BftCommit', 'BftConfig', 'BftConsensus', 'BftMessageType', 'BftProposal', 'BftShare', 'BlsKeyPair', 'BlsPublicKey', 'ThresholdScheme', 'ThresholdSignature', 'abort', 'big', 'commit', 'hash_round_value', 'pending']

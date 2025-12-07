@@ -538,6 +538,7 @@ pub enum Decision {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::crypto::KeyPair;
 
     #[test]
     fn party_other_is_involution() {
@@ -548,11 +549,332 @@ mod tests {
     }
 
     #[test]
+    fn party_name_bytes() {
+        assert_eq!(Party::Alice.name_bytes(), b"ALICE");
+        assert_eq!(Party::Bob.name_bytes(), b"BOB");
+    }
+
+    #[test]
+    fn party_display() {
+        assert_eq!(format!("{}", Party::Alice), "Alice");
+        assert_eq!(format!("{}", Party::Bob), "Bob");
+    }
+
+    #[test]
     fn protocol_phase_ordering() {
         assert!((ProtocolPhase::Init as u8) < (ProtocolPhase::Commitment as u8));
         assert!((ProtocolPhase::Commitment as u8) < (ProtocolPhase::Double as u8));
         assert!((ProtocolPhase::Double as u8) < (ProtocolPhase::Triple as u8));
         assert!((ProtocolPhase::Triple as u8) < (ProtocolPhase::Quad as u8));
         assert!((ProtocolPhase::Quad as u8) < (ProtocolPhase::Complete as u8));
+    }
+
+    #[test]
+    fn protocol_phase_name() {
+        assert_eq!(ProtocolPhase::Init.name(), "Init");
+        assert_eq!(ProtocolPhase::Commitment.name(), "Commitment");
+        assert_eq!(ProtocolPhase::Double.name(), "Double");
+        assert_eq!(ProtocolPhase::Triple.name(), "Triple");
+        assert_eq!(ProtocolPhase::Quad.name(), "Quad");
+        assert_eq!(ProtocolPhase::Complete.name(), "Complete");
+        assert_eq!(ProtocolPhase::Aborted.name(), "Aborted");
+    }
+
+    #[test]
+    fn protocol_phase_display() {
+        assert_eq!(format!("{}", ProtocolPhase::Complete), "Complete");
+    }
+
+    #[test]
+    fn decision_variants() {
+        let attack = Decision::Attack;
+        let abort = Decision::Abort;
+        let pending = Decision::Pending;
+        assert_ne!(attack, abort);
+        assert_ne!(abort, pending);
+    }
+
+    #[test]
+    fn commitment_canonical_bytes() {
+        let kp = KeyPair::generate();
+        let sig = kp.sign(b"test");
+        let commitment = Commitment::new(
+            Party::Alice,
+            kp.public_key().clone(),
+            b"test".to_vec(),
+            sig,
+        );
+        let bytes = commitment.canonical_bytes();
+        assert!(bytes.starts_with(b"C:ALICE:"));
+    }
+
+    #[test]
+    fn commitment_hash() {
+        let kp = KeyPair::generate();
+        let sig = kp.sign(b"test");
+        let commitment = Commitment::new(
+            Party::Alice,
+            kp.public_key().clone(),
+            b"test".to_vec(),
+            sig,
+        );
+        let hash = commitment.hash();
+        assert_eq!(hash.len(), 32);
+    }
+
+    #[test]
+    fn message_phase() {
+        let kp = KeyPair::generate();
+        let sig = kp.sign(b"test");
+        let commitment = Commitment::new(
+            Party::Alice,
+            kp.public_key().clone(),
+            b"test".to_vec(),
+            sig,
+        );
+        let msg = Message {
+            sender: Party::Alice,
+            sequence: 1,
+            payload: MessagePayload::Commitment(commitment),
+        };
+        assert_eq!(msg.phase(), 1);
+    }
+
+    #[test]
+    fn double_proof_message_to_sign() {
+        let kp_alice = KeyPair::generate();
+        let kp_bob = KeyPair::generate();
+
+        let sig_alice = kp_alice.sign(b"test");
+        let sig_bob = kp_bob.sign(b"test");
+
+        let c_alice = Commitment::new(
+            Party::Alice,
+            kp_alice.public_key().clone(),
+            b"test".to_vec(),
+            sig_alice,
+        );
+        let c_bob = Commitment::new(
+            Party::Bob,
+            kp_bob.public_key().clone(),
+            b"test".to_vec(),
+            sig_bob,
+        );
+
+        let double_sig = kp_alice.sign(b"double");
+        let double = DoubleProof::new(Party::Alice, c_alice, c_bob, double_sig);
+
+        let msg = double.message_to_sign();
+        assert!(msg.ends_with(b"||BOTH_COMMITTED"));
+    }
+
+    #[test]
+    fn quad_proof_proves_mutual_constructibility() {
+        // Full protocol simulation to construct a valid QuadProof
+        let kp_alice = KeyPair::generate();
+        let kp_bob = KeyPair::generate();
+
+        // Phase 1: Commitments
+        let sig_alice = kp_alice.sign(b"I will attack");
+        let sig_bob = kp_bob.sign(b"I will attack");
+
+        let c_alice = Commitment::new(
+            Party::Alice,
+            kp_alice.public_key().clone(),
+            b"I will attack".to_vec(),
+            sig_alice,
+        );
+        let c_bob = Commitment::new(
+            Party::Bob,
+            kp_bob.public_key().clone(),
+            b"I will attack".to_vec(),
+            sig_bob,
+        );
+
+        // Phase 2: Double Proofs
+        let d_alice_msg = {
+            let mut msg = c_alice.canonical_bytes();
+            msg.extend_from_slice(b"||");
+            msg.extend_from_slice(&c_bob.canonical_bytes());
+            msg.extend_from_slice(b"||BOTH_COMMITTED");
+            msg
+        };
+        let d_bob_msg = {
+            let mut msg = c_bob.canonical_bytes();
+            msg.extend_from_slice(b"||");
+            msg.extend_from_slice(&c_alice.canonical_bytes());
+            msg.extend_from_slice(b"||BOTH_COMMITTED");
+            msg
+        };
+
+        let d_alice = DoubleProof::new(
+            Party::Alice,
+            c_alice.clone(),
+            c_bob.clone(),
+            kp_alice.sign(&d_alice_msg),
+        );
+        let d_bob = DoubleProof::new(
+            Party::Bob,
+            c_bob.clone(),
+            c_alice.clone(),
+            kp_bob.sign(&d_bob_msg),
+        );
+
+        // Phase 3: Triple Proofs
+        let t_alice_msg = {
+            let mut msg = d_alice.canonical_bytes();
+            msg.extend_from_slice(b"||");
+            msg.extend_from_slice(&d_bob.canonical_bytes());
+            msg.extend_from_slice(b"||BOTH_HAVE_DOUBLE");
+            msg
+        };
+        let t_bob_msg = {
+            let mut msg = d_bob.canonical_bytes();
+            msg.extend_from_slice(b"||");
+            msg.extend_from_slice(&d_alice.canonical_bytes());
+            msg.extend_from_slice(b"||BOTH_HAVE_DOUBLE");
+            msg
+        };
+
+        let t_alice = TripleProof::new(
+            Party::Alice,
+            d_alice.clone(),
+            d_bob.clone(),
+            kp_alice.sign(&t_alice_msg),
+        );
+        let t_bob = TripleProof::new(
+            Party::Bob,
+            d_bob.clone(),
+            d_alice.clone(),
+            kp_bob.sign(&t_bob_msg),
+        );
+
+        // Phase 4: Quad Proofs
+        let q_alice_msg = {
+            let mut msg = t_alice.canonical_bytes();
+            msg.extend_from_slice(b"||");
+            msg.extend_from_slice(&t_bob.canonical_bytes());
+            msg.extend_from_slice(b"||FIXPOINT_ACHIEVED");
+            msg
+        };
+
+        let q_alice = QuadProof::new(
+            Party::Alice,
+            t_alice,
+            t_bob,
+            kp_alice.sign(&q_alice_msg),
+        );
+
+        // Verify the bilateral construction property
+        assert!(q_alice.proves_mutual_constructibility());
+    }
+
+    #[test]
+    fn quad_proof_extract_commitment() {
+        let kp_alice = KeyPair::generate();
+        let kp_bob = KeyPair::generate();
+
+        let sig_alice = kp_alice.sign(b"test");
+        let sig_bob = kp_bob.sign(b"test");
+
+        let c_alice = Commitment::new(
+            Party::Alice,
+            kp_alice.public_key().clone(),
+            b"test".to_vec(),
+            sig_alice,
+        );
+        let c_bob = Commitment::new(
+            Party::Bob,
+            kp_bob.public_key().clone(),
+            b"test".to_vec(),
+            sig_bob,
+        );
+
+        let d_alice = DoubleProof::new(
+            Party::Alice,
+            c_alice.clone(),
+            c_bob.clone(),
+            kp_alice.sign(b"d"),
+        );
+        let d_bob = DoubleProof::new(
+            Party::Bob,
+            c_bob.clone(),
+            c_alice.clone(),
+            kp_bob.sign(b"d"),
+        );
+
+        let t_alice = TripleProof::new(
+            Party::Alice,
+            d_alice.clone(),
+            d_bob.clone(),
+            kp_alice.sign(b"t"),
+        );
+        let t_bob = TripleProof::new(
+            Party::Bob,
+            d_bob,
+            d_alice,
+            kp_bob.sign(b"t"),
+        );
+
+        let q_alice = QuadProof::new(
+            Party::Alice,
+            t_alice,
+            t_bob,
+            kp_alice.sign(b"q"),
+        );
+
+        // Extract Alice's commitment from Q_A
+        let extracted_alice = q_alice.extract_commitment(Party::Alice);
+        assert_eq!(extracted_alice.party, Party::Alice);
+
+        // Extract Bob's commitment from Q_A
+        let extracted_bob = q_alice.extract_commitment(Party::Bob);
+        assert_eq!(extracted_bob.party, Party::Bob);
+    }
+
+    #[test]
+    fn triple_proof_extract_commitments() {
+        let kp_alice = KeyPair::generate();
+        let kp_bob = KeyPair::generate();
+
+        let sig_alice = kp_alice.sign(b"test");
+        let sig_bob = kp_bob.sign(b"test");
+
+        let c_alice = Commitment::new(
+            Party::Alice,
+            kp_alice.public_key().clone(),
+            b"test".to_vec(),
+            sig_alice,
+        );
+        let c_bob = Commitment::new(
+            Party::Bob,
+            kp_bob.public_key().clone(),
+            b"test".to_vec(),
+            sig_bob,
+        );
+
+        let d_alice = DoubleProof::new(
+            Party::Alice,
+            c_alice.clone(),
+            c_bob.clone(),
+            kp_alice.sign(b"d"),
+        );
+        let d_bob = DoubleProof::new(
+            Party::Bob,
+            c_bob,
+            c_alice,
+            kp_bob.sign(b"d"),
+        );
+
+        let t_alice = TripleProof::new(
+            Party::Alice,
+            d_alice,
+            d_bob,
+            kp_alice.sign(b"t"),
+        );
+
+        let (own, other) = t_alice.extract_commitments();
+        assert_eq!(own.party, Party::Alice);
+        assert_eq!(other.party, Party::Bob);
     }
 }

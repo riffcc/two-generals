@@ -31,7 +31,7 @@ import struct
 
 # Try to import hypothesis for property-based testing
 try:
-    from hypothesis import given, settings, strategies as st, assume, Phase
+    from hypothesis import given, settings, strategies as st, assume
     from hypothesis.stateful import RuleBasedStateMachine, rule, precondition
     HAS_HYPOTHESIS = True
 except ImportError:
@@ -78,7 +78,7 @@ class MsgType(Enum):
 
 
 @dataclass
-class TestParty:
+class SimulatedParty:
     """
     Minimal TGP party implementation for Protocol of Theseus testing.
 
@@ -315,8 +315,8 @@ def run_simulation(
 
     # Run simulation
     result = simulator.run(
-        party_a_factory=lambda: TestParty(name="Alice", identity=0),
-        party_b_factory=lambda: TestParty(name="Bob", identity=1),
+        party_a_factory=lambda: SimulatedParty(name="Alice", identity=0),
+        party_b_factory=lambda: SimulatedParty(name="Bob", identity=1),
     )
 
     return result
@@ -359,9 +359,23 @@ def run_theseus_test(
             "undecided": 0,
         }
 
+        # Scale max_ticks based on loss rate to ensure fair-lossy conditions
+        # At high loss rates, need more ticks for messages to get through
+        # Formula: base_ticks * (1 / (1 - loss_rate)^2) capped at reasonable max
+        if loss_rate >= 0.98:
+            max_ticks = 10000  # Extreme loss needs many ticks
+        elif loss_rate >= 0.95:
+            max_ticks = 5000
+        elif loss_rate >= 0.9:
+            max_ticks = 2000
+        elif loss_rate >= 0.7:
+            max_ticks = 1000
+        else:
+            max_ticks = 500
+
         for i in range(runs_per_rate):
             seed = seed_base + int(loss_rate * 1000) * 10000 + i
-            result = run_simulation(loss_rate=loss_rate, seed=seed)
+            result = run_simulation(loss_rate=loss_rate, seed=seed, max_ticks=max_ticks)
 
             rate_results["runs"] += 1
             results["total_runs"] += 1
@@ -575,8 +589,8 @@ if HAS_HYPOTHESIS:
             )
 
             result = simulator.run(
-                party_a_factory=lambda: TestParty(name="Alice", identity=0),
-                party_b_factory=lambda: TestParty(name="Bob", identity=1),
+                party_a_factory=lambda: SimulatedParty(name="Alice", identity=0),
+                party_b_factory=lambda: SimulatedParty(name="Bob", identity=1),
             )
 
             assert not result.is_asymmetric, (

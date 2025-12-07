@@ -48,6 +48,10 @@ pub enum Error {
     /// Cryptographic operation failed.
     #[error("cryptographic error: {0}")]
     Crypto(#[cfg(feature = "std")] String, #[cfg(not(feature = "std"))] &'static str),
+
+    /// BFT consensus error.
+    #[error("BFT error: {0}")]
+    Bft(#[cfg(feature = "std")] String, #[cfg(not(feature = "std"))] &'static str),
 }
 
 #[cfg(feature = "std")]
@@ -61,5 +65,73 @@ impl From<cbor4ii::serde::EncodeError<std::io::Error>> for Error {
 impl From<ed25519_dalek::SignatureError> for Error {
     fn from(_: ed25519_dalek::SignatureError) -> Self {
         Error::InvalidSignature
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn error_display_invalid_signature() {
+        let err = Error::InvalidSignature;
+        assert_eq!(format!("{}", err), "invalid signature");
+    }
+
+    #[test]
+    fn error_display_unexpected_party() {
+        let err = Error::UnexpectedParty {
+            expected: crate::types::Party::Alice,
+            got: crate::types::Party::Bob,
+        };
+        assert!(format!("{}", err).contains("Alice"));
+        assert!(format!("{}", err).contains("Bob"));
+    }
+
+    #[test]
+    fn error_display_invalid_proof_chain() {
+        let err = Error::InvalidProofChain { level: 2 };
+        assert!(format!("{}", err).contains("2"));
+    }
+
+    #[test]
+    fn error_display_invalid_state_transition() {
+        let err = Error::InvalidStateTransition {
+            current_state: "Double",
+            message_type: "Commitment",
+        };
+        assert!(format!("{}", err).contains("Double"));
+        assert!(format!("{}", err).contains("Commitment"));
+    }
+
+    #[test]
+    fn error_display_already_completed() {
+        let err = Error::AlreadyCompleted;
+        assert_eq!(format!("{}", err), "protocol already completed");
+    }
+
+    #[test]
+    fn error_display_serialization() {
+        let err = Error::Serialization("test error".into());
+        assert!(format!("{}", err).contains("test error"));
+    }
+
+    #[test]
+    fn error_display_crypto() {
+        let err = Error::Crypto("crypto error".into());
+        assert!(format!("{}", err).contains("crypto error"));
+    }
+
+    #[test]
+    fn error_clone() {
+        let err = Error::InvalidSignature;
+        let cloned = err.clone();
+        assert_eq!(err, cloned);
+    }
+
+    #[test]
+    fn error_eq() {
+        assert_eq!(Error::InvalidSignature, Error::InvalidSignature);
+        assert_ne!(Error::InvalidSignature, Error::AlreadyCompleted);
     }
 }
