@@ -1354,6 +1354,19 @@ class UIController {
         `;
         resultsContainer.appendChild(header);
 
+        // Build loss rate test range from 0% to 99.9999%
+        const lossRates = [];
+        // 0-90% in 10% steps
+        for (let i = 0; i <= 90; i += 10) lossRates.push(i);
+        // 90-99% in 1% steps
+        for (let i = 91; i <= 99; i++) lossRates.push(i);
+        // 99-99.9% in 0.1% steps
+        for (let i = 99.1; i <= 99.9; i += 0.1) lossRates.push(parseFloat(i.toFixed(1)));
+        // Extreme loss rates
+        lossRates.push(99.99, 99.999, 99.9999);
+
+        const totalTests = lossRates.length;
+
         // Create grid
         const grid = document.createElement('div');
         grid.className = 'theseus-grid';
@@ -1376,20 +1389,6 @@ class UIController {
         let totalTicks = 0;
         let minTicks = Infinity;
         let maxTicks = 0;
-
-        // Run simulations at various loss rates from 0% to 99.9999%
-        // Test the full range including extreme loss rates
-        const lossRates = [];
-        // 0-90% in 10% steps
-        for (let i = 0; i <= 90; i += 10) lossRates.push(i);
-        // 90-99% in 1% steps
-        for (let i = 91; i <= 99; i++) lossRates.push(i);
-        // 99-99.9% in 0.1% steps
-        for (let i = 99.1; i <= 99.9; i += 0.1) lossRates.push(parseFloat(i.toFixed(1)));
-        // Extreme loss rates
-        lossRates.push(99.99, 99.999, 99.9999);
-
-        const totalTests = lossRates.length;
 
         for (let i = 0; i < totalTests; i++) {
             const lossRatePercent = lossRates[i];
