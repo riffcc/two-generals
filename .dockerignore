@@ -1,0 +1,22 @@
+# Only ignore what we don't need in Docker build
+synthesis/
+.git/
+.palace/
+.claude/
+.pytest_cache/
+.lake/
+__pycache__/
+*.pyc
+node_modules/
+target/
+*.log
+*.tmp
+.vscode/
+.idea/
+rust/
+python/
+wasm/
+scripts/
+.gitignore
+*.md
+!README.md
