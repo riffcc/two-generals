@@ -164,6 +164,37 @@ header .subtitle {
     transform: scale(1.1);
 }
 
+.loss-presets {
+    display: flex;
+    gap: 0.25rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.loss-preset {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.7rem;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.loss-preset:hover {
+    background: var(--accent-red);
+    color: white;
+    border-color: var(--accent-red);
+}
+
+.speed-legend {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+    text-align: center;
+}
+
 .button-group {
     display: flex;
     gap: 0.75rem;

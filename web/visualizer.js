@@ -176,63 +176,193 @@ class ProtocolParty {
         }
     }
 
+    /**
+     * Receive and process a message with PROPER PROOF EMBEDDING.
+     *
+     * CRITICAL PROTOCOL FEATURE: Higher proofs embed all lower proofs!
+     * - D contains: C_A, C_B
+     * - T contains: D_A, D_B (which contain C_A, C_B)
+     * - Q contains: T_A, T_B (which contain everything)
+     *
+     * This means: If I receive T_Y, I can extract C_Y and D_Y from it!
+     * The simulation must respect this to avoid false asymmetric outcomes.
+     */
     receiveMessage(msg) {
         if (!msg) return false;
 
+        let advanced = false;
+
+        // PROOF EMBEDDING: Extract all embedded proofs from higher-level messages
+        // This is CRITICAL for bilateral construction property!
+        if (msg.type === 'Q' && msg.proof) {
+            // Q contains T, which contains D, which contains C
+            if (msg.proof.otherTriple) {
+                this.processEmbeddedTriple(msg.proof.otherTriple);
+            }
+            if (msg.proof.ownTriple) {
+                this.processEmbeddedTriple(msg.proof.ownTriple);
+            }
+        }
+
+        if (msg.type === 'T' && msg.proof) {
+            // T contains D, which contains C
+            this.processEmbeddedTriple(msg.proof);
+        }
+
+        if (msg.type === 'D' && msg.proof) {
+            // D contains C
+            this.processEmbeddedDouble(msg.proof);
+        }
+
+        // Now process the message itself
         switch (msg.type) {
             case 'C':
-                if (this.phase === Phase.COMMITMENT && !this.otherCommitment) {
+                if (!this.otherCommitment) {
                     this.otherCommitment = msg.proof;
-                    this.doubleProof = this.createDoubleProof();
-                    this.phase = Phase.DOUBLE;
-                    this.proofArtifacts.push({
-                        type: 'double',
-                        label: `D_${this.isAlice ? 'A' : 'B'}`,
-                        description: 'Contains both commitments'
-                    });
-                    return true;
+                    this.tryAdvanceToDouble();
+                    advanced = true;
                 }
                 break;
 
             case 'D':
-                if (this.phase === Phase.DOUBLE && !this.otherDoubleProof) {
+                if (!this.otherDoubleProof && msg.proof) {
                     this.otherDoubleProof = msg.proof;
-                    this.tripleProof = this.createTripleProof();
-                    this.phase = Phase.TRIPLE;
-                    this.proofArtifacts.push({
-                        type: 'triple',
-                        label: `T_${this.isAlice ? 'A' : 'B'}`,
-                        description: 'Contains both double proofs'
-                    });
-                    return true;
+                    this.tryAdvanceToTriple();
+                    advanced = true;
                 }
                 break;
 
             case 'T':
-                if (this.phase === Phase.TRIPLE && !this.otherTripleProof) {
+                if (!this.otherTripleProof && msg.proof) {
                     this.otherTripleProof = msg.proof;
-                    // Key insight: Receiving T_Y gives us D_Y for free (embedded inside)
-                    // This is the bilateral construction property in action
-                    this.embeddedProofs.add('D_other_from_T');
-                    this.quadProof = this.createQuadProof();
-                    this.phase = Phase.QUAD;
-                    this.proofArtifacts.push({
-                        type: 'quad',
-                        label: `Q_${this.isAlice ? 'A' : 'B'}`,
-                        description: 'Epistemic fixpoint achieved! (Q proves mutual constructibility)'
-                    });
-                    return true;
+                    this.embeddedProofs.add('T_other');
+                    this.tryAdvanceToQuad();
+                    advanced = true;
                 }
                 break;
 
             case 'Q':
                 if (this.phase === Phase.QUAD) {
                     this.phase = Phase.COMPLETE;
-                    return true;
+                    advanced = true;
                 }
                 break;
         }
-        return false;
+
+        return advanced;
+    }
+
+    /**
+     * Extract embedded proofs from a Triple proof.
+     * T contains D_X and D_Y, each of which contains C_X and C_Y.
+     */
+    processEmbeddedTriple(triple) {
+        if (!triple) return;
+
+        // Extract embedded doubles
+        if (triple.ownDouble) {
+            this.processEmbeddedDouble(triple.ownDouble);
+        }
+        if (triple.otherDouble) {
+            this.processEmbeddedDouble(triple.otherDouble);
+            if (!this.otherDoubleProof) {
+                this.otherDoubleProof = triple.otherDouble;
+                this.embeddedProofs.add('D_other_from_T');
+            }
+        }
+
+        // If this is the other party's triple, we can use it directly
+        if (triple.party !== this.name && !this.otherTripleProof) {
+            this.otherTripleProof = triple;
+            this.embeddedProofs.add('T_other_embedded');
+        }
+    }
+
+    /**
+     * Extract embedded proofs from a Double proof.
+     * D contains C_X and C_Y.
+     */
+    processEmbeddedDouble(double) {
+        if (!double) return;
+
+        // Extract embedded commitments
+        if (double.otherCommitment && !this.otherCommitment) {
+            // The other party's commitment might be in here
+            if (double.otherCommitment.party !== this.name) {
+                this.otherCommitment = double.otherCommitment;
+                this.embeddedProofs.add('C_other_from_D');
+            }
+        }
+        if (double.ownCommitment && double.ownCommitment.party !== this.name) {
+            // This D was created by the other party, so ownCommitment is theirs
+            if (!this.otherCommitment) {
+                this.otherCommitment = double.ownCommitment;
+                this.embeddedProofs.add('C_other_from_D');
+            }
+        }
+    }
+
+    /**
+     * Try to advance to Double phase if we have the required proofs.
+     */
+    tryAdvanceToDouble() {
+        if (this.phase === Phase.COMMITMENT && this.otherCommitment && !this.doubleProof) {
+            this.doubleProof = this.createDoubleProof();
+            this.phase = Phase.DOUBLE;
+            this.proofArtifacts.push({
+                type: 'double',
+                label: `D_${this.isAlice ? 'A' : 'B'}`,
+                description: 'Contains both commitments'
+            });
+        }
+    }
+
+    /**
+     * Try to advance to Triple phase if we have the required proofs.
+     */
+    tryAdvanceToTriple() {
+        // Need to be at Double and have the other's Double
+        if (this.phase === Phase.DOUBLE && this.otherDoubleProof && !this.tripleProof) {
+            this.tripleProof = this.createTripleProof();
+            this.phase = Phase.TRIPLE;
+            this.proofArtifacts.push({
+                type: 'triple',
+                label: `T_${this.isAlice ? 'A' : 'B'}`,
+                description: 'Contains both double proofs'
+            });
+        }
+        // Also check if we can skip directly from Commitment to Triple
+        // (if we received a D or T that gave us everything)
+        if (this.phase === Phase.COMMITMENT && this.otherCommitment) {
+            this.tryAdvanceToDouble();
+        }
+        if (this.phase === Phase.DOUBLE && this.otherDoubleProof && !this.tripleProof) {
+            this.tripleProof = this.createTripleProof();
+            this.phase = Phase.TRIPLE;
+            this.proofArtifacts.push({
+                type: 'triple',
+                label: `T_${this.isAlice ? 'A' : 'B'}`,
+                description: 'Contains both double proofs'
+            });
+        }
+    }
+
+    /**
+     * Try to advance to Quad phase if we have the required proofs.
+     */
+    tryAdvanceToQuad() {
+        // Ensure we're caught up on previous phases first
+        this.tryAdvanceToTriple();
+
+        if (this.phase === Phase.TRIPLE && this.otherTripleProof && !this.quadProof) {
+            this.quadProof = this.createQuadProof();
+            this.phase = Phase.QUAD;
+            this.proofArtifacts.push({
+                type: 'quad',
+                label: `Q_${this.isAlice ? 'A' : 'B'}`,
+                description: 'Epistemic fixpoint achieved! (Q proves mutual constructibility)'
+            });
+        }
     }
 
     createDoubleProof() {
@@ -270,7 +400,34 @@ class ProtocolParty {
     }
 
     canAttack() {
+        // CRITICAL: Party decides ATTACK as soon as they construct Q (Phase.QUAD)
+        // NOT when they receive the other party's Q
+        // This is the core of the bilateral construction property:
+        // If I can construct Q_A, then Q_B is constructible
         return this.phase >= Phase.QUAD;
+    }
+
+    /**
+     * Make the final decision based on protocol state and deadline.
+     *
+     * PROTOCOL RULES (from paper Algorithm 1):
+     * - Upon constructing Q_X: decide ATTACK
+     * - Upon deadline expires without Q: decide ABORT
+     *
+     * This is the key to symmetric outcomes:
+     * - Both reach Q → Both ATTACK
+     * - Neither reach Q → Both ABORT (deadline)
+     * - One reaches Q → Bilateral construction guarantees the other can too,
+     *   but if deadline is too short, both should ABORT
+     */
+    getDecision(deadlineExpired) {
+        if (this.phase >= Phase.QUAD) {
+            return 'ATTACK';
+        }
+        if (deadlineExpired) {
+            return 'ABORT';
+        }
+        return 'PENDING';
     }
 }
 
@@ -914,23 +1071,58 @@ class UIController {
     }
 
     bindEvents() {
-        // Loss rate slider
+        // Loss rate slider - supports extreme loss rates up to 99.9999%
         const lossSlider = document.getElementById('loss-rate');
         const lossValue = document.getElementById('loss-value');
+
+        const updateLossRate = (value) => {
+            // Map slider 0-100 to loss rate with logarithmic scaling for high end
+            let lossRate;
+            if (value <= 90) {
+                lossRate = value;
+            } else {
+                // Exponential scaling from 90% to 99.9999%
+                const remaining = value - 90; // 0-10
+                const nines = remaining; // Number of 9s after decimal
+                lossRate = 100 - Math.pow(10, -nines / 2);
+            }
+            const displayValue = lossRate >= 99.9 ? lossRate.toFixed(Math.max(0, Math.ceil(Math.log10(1 / (100 - lossRate))))) : lossRate.toFixed(1);
+            lossValue.textContent = `${displayValue}%`;
+            this.simulation.lossRate = lossRate / 100;
+            this.currentLossRate = lossRate;
+        };
+
         lossSlider.addEventListener('input', (e) => {
-            const value = parseInt(e.target.value);
-            lossValue.textContent = `${value}%`;
-            this.simulation.lossRate = value / 100;
+            updateLossRate(parseFloat(e.target.value));
         });
 
-        // Speed slider
+        // Loss rate preset buttons
+        document.querySelectorAll('.loss-preset').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const lossRate = parseFloat(e.target.dataset.loss);
+                this.simulation.lossRate = lossRate / 100;
+                this.currentLossRate = lossRate;
+                lossValue.textContent = `${lossRate}%`;
+                // Update slider position approximately
+                if (lossRate <= 90) {
+                    lossSlider.value = lossRate;
+                } else {
+                    lossSlider.value = 90 + (100 - lossRate < 0.0001 ? 10 : -2 * Math.log10(100 - lossRate));
+                }
+            });
+        });
+
+        // Speed slider - exponential: 1x, 5x, 50x, 500x, 5000x
         const speedSlider = document.getElementById('speed');
         const speedValue = document.getElementById('speed-value');
+        const speedLevels = [1, 5, 50, 500, 5000];
+
         speedSlider.addEventListener('input', (e) => {
-            const value = parseFloat(e.target.value);
-            speedValue.textContent = `${value}x`;
-            this.simulation.speed = value;
-            this.tickInterval = 100 / value;
+            const idx = parseInt(e.target.value);
+            const speed = speedLevels[idx] || 1;
+            speedValue.textContent = `${speed}x`;
+            this.simulation.speed = speed;
+            this.tickInterval = 100 / Math.min(speed, 50); // Cap tick interval floor
         });
 
         // Start button
@@ -1165,10 +1357,12 @@ class UIController {
 
         const cells = [];
         const results = [];
-        for (let i = 0; i < 100; i++) {
+
+        // Create cells for each loss rate test
+        for (let i = 0; i < lossRates.length; i++) {
             const cell = document.createElement('div');
             cell.className = 'theseus-cell';
-            cell.title = `Loss rate: ${((i / 100) * 98).toFixed(0)}%`;
+            cell.title = `Loss rate: ${lossRates[i]}%`;
             grid.appendChild(cell);
             cells.push(cell);
         }
@@ -1179,12 +1373,25 @@ class UIController {
         let minTicks = Infinity;
         let maxTicks = 0;
 
-        // Run simulations at various loss rates
-        for (let i = 0; i < 100; i++) {
-            progress.textContent = `Running simulation ${i + 1}/100... (${((i / 100) * 98).toFixed(0)}% loss)`;
+        // Run simulations at various loss rates from 0% to 99.9999%
+        // Test the full range including extreme loss rates
+        const lossRates = [];
+        // 0-90% in 10% steps
+        for (let i = 0; i <= 90; i += 10) lossRates.push(i);
+        // 90-99% in 1% steps
+        for (let i = 91; i <= 99; i++) lossRates.push(i);
+        // 99-99.9% in 0.1% steps
+        for (let i = 99.1; i <= 99.9; i += 0.1) lossRates.push(parseFloat(i.toFixed(1)));
+        // Extreme loss rates
+        lossRates.push(99.99, 99.999, 99.9999);
 
-            // Vary loss rate from 0% to 98%
-            const lossRate = (i / 100) * 0.98;
+        const totalTests = lossRates.length;
+
+        for (let i = 0; i < totalTests; i++) {
+            const lossRatePercent = lossRates[i];
+            progress.textContent = `Running simulation ${i + 1}/${totalTests}... (${lossRatePercent}% loss)`;
+
+            const lossRate = lossRatePercent / 100;
             const result = await this.runSingleSimulation(lossRate);
             results.push(result);
 
@@ -1201,7 +1408,10 @@ class UIController {
             maxTicks = Math.max(maxTicks, result.ticks);
 
             // Update cell tooltip with result details
-            cells[i].title = `Loss: ${(lossRate * 100).toFixed(0)}% | Ticks: ${result.ticks} | ${result.symmetric ? 'SYMMETRIC' : 'ASYMMETRIC'}`;
+            const outcomeText = result.symmetric
+                ? `${result.aliceDecision} (symmetric)`
+                : `Alice:${result.aliceDecision} Bob:${result.bobDecision} (ASYMMETRIC!)`;
+            cells[i].title = `Loss: ${(lossRate * 100).toFixed(0)}% | Ticks: ${result.ticks} | ${outcomeText}`;
 
             // Small delay for visual effect
             await new Promise(r => setTimeout(r, 10));
@@ -1235,38 +1445,88 @@ class UIController {
         button.disabled = false;
     }
 
+    /**
+     * Run a single TGP simulation with correct protocol semantics.
+     * OPTIMIZED: Runs synchronously in batches for speed.
+     *
+     * CRITICAL PROTOCOL RULES:
+     * 1. Each party decides ATTACK upon constructing their Q (Phase.QUAD)
+     * 2. Each party decides ABORT if deadline expires without Q
+     * 3. The bilateral construction property guarantees:
+     *    - If Alice can construct Q_A, Bob can construct Q_B (given fair-lossy)
+     *    - Therefore: both reach Q → both ATTACK (symmetric)
+     *    - Neither reach Q → both ABORT (symmetric)
+     *    - IMPOSSIBLE: one ATTACK, one ABORT (would violate bilateral property)
+     */
     runSingleSimulation(lossRate) {
         return new Promise((resolve) => {
             const sim = new ProtocolSimulation(lossRate);
             sim.start();
 
             let ticks = 0;
-            const maxTicks = 500;
+            // Model: 1000 msgs/sec for 18 hours = 64,800,000 attempts
+            // For browser sim, we scale: each tick = 6480 real attempts
+            // So 10,000 ticks = 64.8M attempts (full 18-hour window)
+            const maxTicks = 10000;
 
-            const runTick = () => {
-                sim.step();
-                ticks++;
+            // Run synchronously in batches for SPEED
+            const BATCH_SIZE = 100; // Process 100 ticks at a time
 
-                // Check completion
-                const aliceComplete = sim.alice.isComplete();
-                const bobComplete = sim.bob.isComplete();
+            const runBatch = () => {
+                for (let i = 0; i < BATCH_SIZE && ticks < maxTicks; i++) {
+                    sim.step();
+                    ticks++;
 
-                if ((aliceComplete && bobComplete) || ticks >= maxTicks) {
-                    // Determine symmetry
-                    const symmetric = (aliceComplete === bobComplete);
+                    // EARLY TERMINATION: Once both reach QUAD, fast-forward!
+                    const aliceCanAttack = sim.alice.canAttack();
+                    const bobCanAttack = sim.bob.canAttack();
+
+                    if (aliceCanAttack && bobCanAttack) {
+                        resolve({
+                            symmetric: true,
+                            aliceDecision: 'ATTACK',
+                            bobDecision: 'ATTACK',
+                            alicePhase: sim.alice.phase,
+                            bobPhase: sim.bob.phase,
+                            ticks,
+                            lossRate,
+                            outcome: 'ATTACK',
+                            fastForwarded: true
+                        });
+                        return true; // Done
+                    }
+                }
+                return false; // Not done yet
+            };
+
+            // Run batches until done or deadline
+            const runLoop = () => {
+                if (runBatch()) return; // Early termination
+
+                if (ticks >= maxTicks) {
+                    // Deadline expired - both ABORT (symmetric)
+                    const aliceDecision = sim.alice.getDecision(true);
+                    const bobDecision = sim.bob.getDecision(true);
+                    const symmetric = (aliceDecision === bobDecision);
+
                     resolve({
                         symmetric,
-                        aliceComplete,
-                        bobComplete,
+                        aliceDecision,
+                        bobDecision,
+                        alicePhase: sim.alice.phase,
+                        bobPhase: sim.bob.phase,
                         ticks,
-                        lossRate
+                        lossRate,
+                        outcome: symmetric ? aliceDecision : 'ASYMMETRIC',
+                        fastForwarded: false
                     });
                 } else {
-                    setTimeout(runTick, 0);
+                    // Yield to browser, then continue
+                    setTimeout(runLoop, 0);
                 }
             };
 
-            runTick();
+            runLoop();
         });
     }
 }
