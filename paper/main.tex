@@ -1358,20 +1358,23 @@ For the majority of internet traffic---small API calls, WebSocket messages, DNS 
 TGP thus represents not a niche solution for hostile networks, but a \textbf{fundamental improvement to coordination primitives} applicable across all network conditions, with graceful linear degradation where TCP suffers exponential collapse.
 
 \paragraph{Formal Verification.}
-The Lean 4 formalization (\texttt{lean4/}) provides machine-verified guarantees with \textbf{zero \texttt{sorry} statements}---the proofs are complete with no deferred obligations. The verification includes 33+ theorems across four layers:
+The Lean 4 formalization (\texttt{lean4/}) provides machine-verified guarantees with \textbf{zero \texttt{sorry} statements}---the proofs are complete with no deferred obligations. The verification includes 50+ theorems across 13 layers, with extensive axiom reduction through Mathlib integration:
 
 \begin{center}
-\begin{tabular}{lll}
+\begin{tabular}{llll}
 \toprule
-\textbf{Layer} & \textbf{File} & \textbf{Key Theorems} \\
+\textbf{Layer} & \textbf{File} & \textbf{Theorems} & \textbf{Axioms} \\
 \midrule
-Core Protocol & \texttt{TwoGenerals.lean} & 22 theorems \\
-Network Model & \texttt{NetworkModel.lean} & 5 theorems \\
-Timeout Logic & \texttt{TimeoutMechanism.lean} & 4 theorems \\
-Main Results & \texttt{MainTheorem.lean} & 2 theorems \\
+Core Protocol & \texttt{TwoGenerals.lean} & 22 & 12 (protocol) \\
+Network Model & \texttt{NetworkModel.lean} & 9 & 3 (probabilistic) \\
+Timeout Logic & \texttt{TimeoutMechanism.lean} & 7 & 14 (Time type) \\
+Extreme Loss & \texttt{ExtremeLoss.lean} & 10 & 7 (statistical) \\
+Main Results & \texttt{MainTheorem.lean} & 2 & 0 \\
 \bottomrule
 \end{tabular}
 \end{center}
+
+\noindent \textbf{Mathlib Integration:} The formalization uses Mathlib v4.26.0 for standard mathematical facts, eliminating 38 axioms that were previously axiomatized for real number arithmetic. Remaining axioms (36 total) capture genuine domain-specific properties: cryptographic primitives, probabilistic network models, and abstract Time types---not arithmetic that Mathlib proves automatically via \texttt{linarith}, \texttt{norm\_num}, and \texttt{nlinarith}.
 
 \noindent Key verified properties:
 \begin{itemize}
@@ -1381,9 +1384,8 @@ Main Results & \texttt{MainTheorem.lean} & 2 theorems \\
     \item \texttt{gray\_impossibility\_assumption\_violated}: The fixpoint breaks Gray's proof structure
     \item \texttt{level\_n\_cryptographically\_guaranteed}: All five knowledge levels verified
     \item \texttt{common\_knowledge\_implies\_coordination}: CK enables symmetric action
+    \item \texttt{extreme\_loss\_reliable}: 99.9999\% loss $\Rightarrow$ 99.9\%+ success
 \end{itemize}
-
-The proofs are \textbf{self-contained}: they define their own axioms for cryptographic primitives (signatures, hashes) and time, without depending on external libraries like Mathlib. Build time: 5.5 seconds.
 
 \paragraph{Risk Decomposition.}
 The sources of failure risk are now completely separated:
