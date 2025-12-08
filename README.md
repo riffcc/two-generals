@@ -8,6 +8,9 @@
 
 ---
 🏗️🚧 UNDER CONSTRUCTION 👷👷‍♀️
+
+This repository needs heavy peer review. Please help us to test this software and this protocol.
+
 ## Executive Summary
 
 For 47 years, the Two Generals Problem has been considered mathematically impossible to solve over lossy channels. We prove this interpretation incorrect through **cryptographic proof stapling** and **bilateral construction properties**.
