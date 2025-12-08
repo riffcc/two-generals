@@ -37,3 +37,27 @@ lean_lib «LightweightTGP» {
 lean_lib «BFT» {
   -- Layer 7: Byzantine Fault Tolerant N-party extension
 }
+
+lean_lib «GraysModel» {
+  -- Layer 8: Exact modeling of Original 1978 Formulation of Two Generals
+}
+
+lean_lib «CommonKnowledge» {
+  -- Layer 9: Formal epistemic logic - Halpern & Moses CK definitions
+}
+
+lean_lib «RecursiveProofs» {
+  -- Layer 10: Identical recursive proof construction at each round
+}
+
+lean_lib «AdversarialScheduling» {
+  -- Layer 11: Exhaustive adversarial edge case analysis
+}
+
+lean_lib «AxiomMinimality» {
+  -- Layer 12: Axiom justification and derivation
+}
+
+lean_lib «ProtocolVariants» {
+  -- Layer 13: Timeout alternatives and Byzantine message handling
+}
