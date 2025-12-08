@@ -209,8 +209,12 @@ theorem r3_conf_final_enables_receipt (s : PartyState) :
   case false => simp [hc] at h
   case true =>
     cases hr : s.got_r3_conf
-    case false => simp [hc, hr] at h
-    case true => simp [hc, hr]
+    case false =>
+      set_option linter.unusedSimpArgs false in
+      simp [hc, hr] at h
+    case true =>
+      set_option linter.unusedSimpArgs false in
+      simp [hc, hr]
 
 -- THE GUARANTEE: If partner sent R3_CONF_FINAL, partner has the receipt
 -- This is the structural property that makes R3_CONF_FINAL "ironically symmetric"
@@ -347,7 +351,7 @@ theorem safety (s : ProtocolState) :
       rename_i adec bdec
       cases adec <;> cases bdec
       · -- Attack/Attack
-        simp [hdeca, hdecb]
+        simp
       · -- Attack/Abort - IMPOSSIBLE
         exfalso
         exact impossible_alice_attack_bob_abort s hdeca hdecb
@@ -355,7 +359,7 @@ theorem safety (s : ProtocolState) :
         exfalso
         exact impossible_bob_attack_alice_abort s hdeca hdecb
       · -- Abort/Abort
-        simp [hdeca, hdecb]
+        simp
 
 /-! ## What We've Proven -/
 
@@ -534,18 +538,18 @@ axiom bilateral_receipts_identical : ∀ (ar br : BilateralReceipt),
 /-! ## COMMON KNOWLEDGE FORMALIZATION -/
 
 -- Common knowledge: All finite levels of "knows that knows that..."
-def common_knowledge (order : AttackOrder) : Prop :=
-  ∀ (n : Nat), ∀ (p : Party), True  -- All knowledge levels present
+def common_knowledge (_ : AttackOrder) : Prop :=
+  ∀ (_ : Nat), ∀ (_ : Party), True  -- All knowledge levels present
 
 /-! ## THE BREAKTHROUGH THEOREM -/
 
 -- If both parties have the bilateral receipt, they have COMMON KNOWLEDGE
 theorem bilateral_receipt_implies_common_knowledge
   (receipt : BilateralReceipt)
-  (alice_has : True)
-  (bob_has : True)
+  (_ : True)
+  (_ : True)
   : common_knowledge (receipt_alice_order receipt) := by
-  intro n p
+  intro _ _
   trivial
 
 -- Gray's impossibility assumption violated
@@ -899,7 +903,7 @@ theorem no_asymmetric_receipt (trace : ExecutionTrace) :
   unfold asymmetric_receipt
   cases ha : alice_has_receipt trace <;> cases hb : bob_has_receipt trace
   · -- Both false: neither has receipt - symmetric
-    simp [ha, hb]
+    simp
   · -- Alice false, Bob true
     -- By symmetry axiom, if Bob has receipt, Alice must have it
     have alice_must : alice_has_receipt trace = true :=
@@ -915,7 +919,7 @@ theorem no_asymmetric_receipt (trace : ExecutionTrace) :
     rw [hb] at bob_must
     cases bob_must
   · -- Both true: both have receipt - symmetric
-    simp [ha, hb]
+    simp
 
 -- Outcome after removing a message
 inductive RemovalOutcome where
@@ -937,7 +941,7 @@ theorem any_trace_symmetric (trace : ExecutionTrace) :
   -- If both_have_receipt, we're done (BothAttack)
   cases hb : both_have_receipt trace
   · -- both_have_receipt = false
-    simp [hb]
+    simp
     -- Need to show: if neither, then BothAbort; if asymmetric, impossible
     cases hn : neither_has_receipt trace
     · -- neither_has_receipt = false, both_have_receipt = false
@@ -958,7 +962,7 @@ theorem any_trace_symmetric (trace : ExecutionTrace) :
         simp [ha, hbob] at hb
     · -- neither_has_receipt = true
       right
-      simp only [hn]
+      simp only
   · -- both_have_receipt = true
     left
     simp only [↓reduceIte]
@@ -1173,9 +1177,9 @@ theorem guaranteed_termination (trace : ExecutionTrace) :
   refine ⟨deadline_decision (alice_has_receipt trace),
           deadline_decision (bob_has_receipt trace), ?_, ?_⟩
   · unfold deadline_decision
-    cases alice_has_receipt trace <;> simp [Decision.Attack, Decision.Abort]
+    cases alice_has_receipt trace <;> simp
   · unfold deadline_decision
-    cases bob_has_receipt trace <;> simp [Decision.Attack, Decision.Abort]
+    cases bob_has_receipt trace <;> simp
 
 -- ============================================================================
 -- SECTION 5.3: ATOMIC COORDINATION
@@ -1209,7 +1213,7 @@ theorem asymmetric_coordination_impossible (trace : ExecutionTrace) :
   -- Case analysis on receipt states
   cases h_alice : alice_has_receipt trace <;> cases h_bob : bob_has_receipt trace
   · -- Both false → BothAbort
-    simp [h_alice, h_bob]
+    simp
   · -- Alice false, Bob true → IMPOSSIBLE by bilateral receipt symmetry
     have h := receipt_bilaterally_implies_sym trace h_bob
     rw [h_alice] at h
@@ -1219,7 +1223,7 @@ theorem asymmetric_coordination_impossible (trace : ExecutionTrace) :
     rw [h_bob] at h
     cases h
   · -- Both true → BothAttack
-    simp [h_alice, h_bob]
+    simp
 
 /-- COROLLARY: Every execution has symmetric coordination -/
 theorem guaranteed_symmetric_coordination (trace : ExecutionTrace) :
@@ -1291,7 +1295,7 @@ TGP achieves:
     3. This holds under ANY message loss pattern -/
 structure TGPSolution where
   /-- Every trace produces termination -/
-  terminates : ∀ trace : ExecutionTrace,
+  terminates : ∀ (_ : ExecutionTrace),
     ∃ (a b : Decision), (a = Decision.Attack ∨ a = Decision.Abort) ∧
                         (b = Decision.Attack ∨ b = Decision.Abort)
   /-- Every trace produces symmetric outcome -/
@@ -1428,7 +1432,7 @@ while maintaining the safety properties TGP guarantees.
 -- ============================================================================
 
 /-- Count successful message deliveries in a trace -/
-def message_count (trace : ExecutionTrace) : Nat :=
+def message_count (_ : ExecutionTrace) : Nat :=
   -- Count how many distinct messages were delivered
   -- In practice: count R1, R2, R3_CONF from Alice, R3_CONF from Bob
   -- This is a simplified model - full version would inspect trace.delivered
