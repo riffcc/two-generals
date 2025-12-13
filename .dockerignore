@@ -5,9 +5,12 @@ synthesis/
 .claude/
 .pytest_cache/
 .lake/
+**/.lake/
+lean4/.lake/
 __pycache__/
 *.pyc
 node_modules/
+**/node_modules/
 target/
 *.log
 *.tmp
@@ -20,3 +23,9 @@ scripts/
 .gitignore
 *.md
 !README.md
+# Large generated files
+*.o
+*.olean
+.playwright-mcp/
+web/test-results/
+web/tests/

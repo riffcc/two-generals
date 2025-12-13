@@ -1,5 +1,6 @@
 # Keep synthesis folder private until ready
 synthesis/
+.mcp.json
 
 # Python
 __pycache__/
