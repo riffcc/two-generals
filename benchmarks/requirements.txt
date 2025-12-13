@@ -1,0 +1,6 @@
+# TGP-Piper Benchmarking Python Dependencies
+# Install with: pip3 install -r requirements.txt
+
+matplotlib>=3.5.0
+pandas>=1.4.0
+numpy>=1.22.0

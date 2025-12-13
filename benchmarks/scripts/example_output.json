@@ -1,0 +1,44 @@
+{
+  "timestamp": "2025-12-11T12:00:00Z",
+  "scenario": "localhost",
+  "run": 1,
+  "file_size": "1G",
+  "connection": {
+    "time_ms": 0.45,
+    "handshake_rounds": 4,
+    "bilateral_receipt_time_ms": 0.38,
+    "proof_exchanges": {
+      "commitment": 1,
+      "double_proof": 1,
+      "triple_proof": 1,
+      "quad_proof": 1
+    }
+  },
+  "transfer": {
+    "duration_ms": 950,
+    "throughput_mbps": 1080.5,
+    "cpu_usage_percent": 45.2,
+    "memory_usage_mb": 120.4,
+    "packet_loss_percent": 0.0,
+    "retry_count": 0,
+    "bytes_transferred": 1073741824,
+    "chunk_size": 65536,
+    "chunks_transferred": 16384
+  },
+  "flood": {
+    "min_rate_pps": 10,
+    "max_rate_pps": 100000,
+    "avg_rate_pps": 45000.2,
+    "rate_adjustments": 12,
+    "ramp_up_events": 8,
+    "ramp_down_events": 4,
+    "current_rate_pps": 10
+  },
+  "system": {
+    "hostname": "sanctuary",
+    "os": "Linux 6.17.2-2-pve",
+    "cpu_cores": 16,
+    "memory_total_mb": 65536,
+    "network_interface": "eth0"
+  }
+}
