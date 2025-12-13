@@ -85,3 +85,8 @@ dmypy.json
 # Palace
 .palace/
 .palace/
+
+# Experimental/local directories
+.playwright-mcp/
+python/pipepiper/
+web/.deploy/
