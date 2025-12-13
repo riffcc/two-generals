@@ -1,0 +1,23 @@
+[package]
+name = "adaptive-flooding"
+version = "0.1.0"
+authors = ["Riff Labs <wings@riff.cc>"]
+edition = "2021"
+license = "AGPL-3.0"
+description = "Adaptive flooding protocol implementation for TGP"
+repository = "https://github.com/rifflabs/two-generals-public"
+keywords = ["distributed-systems", "cryptography", "consensus", "byzantine", "adaptive"]
+categories = ["cryptography", "network-programming"]
+
+[lib]
+name = "adaptive_flooding"
+crate-type = ["rlib"]
+
+[dependencies]
+two-generals = { path = "../rust" }
+tokio = { version = "1.35.1", features = ["full"] }
+thiserror = "1.0.50"
+tracing = "0.1.40"
+bincode = "1.3.3"
+serde = { version = "1.0.193", features = ["derive"] }
+rayon = "1.8.1"
