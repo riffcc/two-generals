@@ -185,6 +185,61 @@ impl TwoGenerals {
         instance
     }
 
+    /// Create a SYMMETRIC TwoGenerals instance.
+    ///
+    /// Party role is determined automatically from public key comparison:
+    /// - Lower BLAKE3 hash of public key = Alice
+    /// - Higher BLAKE3 hash of public key = Bob
+    ///
+    /// This ensures both peers create instances with opposite roles
+    /// without needing to coordinate who is "initiator".
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// // Both peers call the same constructor with the same keys
+    /// let alice = TwoGenerals::symmetric(alice_keypair, bob_pubkey);
+    /// let bob = TwoGenerals::symmetric(bob_keypair, alice_pubkey);
+    /// // alice.party() == Party::Alice, bob.party() == Party::Bob (or vice versa)
+    /// // The important thing: they have OPPOSITE roles
+    /// ```
+    #[must_use]
+    pub fn symmetric(keypair: KeyPair, counterparty_public_key: PublicKey) -> Self {
+        let my_hash = blake3::hash(keypair.public_key().as_bytes());
+        let their_hash = blake3::hash(counterparty_public_key.as_bytes());
+
+        // Lower hash = Alice, Higher hash = Bob
+        let party = if my_hash.as_bytes() < their_hash.as_bytes() {
+            Party::Alice
+        } else {
+            Party::Bob
+        };
+
+        Self::new(party, keypair, counterparty_public_key)
+    }
+
+    /// Create a SYMMETRIC TwoGenerals instance with a custom commitment message.
+    ///
+    /// See [`symmetric`] for how party roles are determined.
+    #[must_use]
+    pub fn symmetric_with_commitment(
+        keypair: KeyPair,
+        counterparty_public_key: PublicKey,
+        commitment_message: Vec<u8>,
+    ) -> Self {
+        let my_hash = blake3::hash(keypair.public_key().as_bytes());
+        let their_hash = blake3::hash(counterparty_public_key.as_bytes());
+
+        // Lower hash = Alice, Higher hash = Bob
+        let party = if my_hash.as_bytes() < their_hash.as_bytes() {
+            Party::Alice
+        } else {
+            Party::Bob
+        };
+
+        Self::with_commitment_message(party, keypair, counterparty_public_key, commitment_message)
+    }
+
     /// Get this party's identity.
     #[must_use]
     pub const fn party(&self) -> Party {
@@ -984,6 +1039,87 @@ mod tests {
 
         assert!(alice.is_complete());
         assert!(bob.is_complete());
+    }
+
+    #[test]
+    fn symmetric_constructor_assigns_opposite_roles() {
+        let kp_a = KeyPair::generate();
+        let kp_b = KeyPair::generate();
+
+        // Both peers use the symmetric constructor
+        let peer_a = TwoGenerals::symmetric(kp_a.clone(), kp_b.public_key().clone());
+        let peer_b = TwoGenerals::symmetric(kp_b.clone(), kp_a.public_key().clone());
+
+        // They must have opposite roles
+        assert_ne!(
+            peer_a.party(),
+            peer_b.party(),
+            "Symmetric constructor must assign opposite roles"
+        );
+    }
+
+    #[test]
+    fn symmetric_constructor_completes_protocol() {
+        let kp_a = KeyPair::generate();
+        let kp_b = KeyPair::generate();
+
+        // Both peers use the symmetric constructor - no need to know who is "initiator"
+        let mut peer_a = TwoGenerals::symmetric(kp_a.clone(), kp_b.public_key().clone());
+        let mut peer_b = TwoGenerals::symmetric(kp_b.clone(), kp_a.public_key().clone());
+
+        // Run to completion
+        for _ in 0..20 {
+            for msg in peer_a.get_messages_to_send() {
+                peer_b.receive(&msg).unwrap();
+            }
+            for msg in peer_b.get_messages_to_send() {
+                peer_a.receive(&msg).unwrap();
+            }
+
+            if peer_a.is_complete() && peer_b.is_complete() {
+                break;
+            }
+        }
+
+        assert!(peer_a.is_complete(), "Peer A should complete");
+        assert!(peer_b.is_complete(), "Peer B should complete");
+        assert!(peer_a.can_attack());
+        assert!(peer_b.can_attack());
+    }
+
+    #[test]
+    fn symmetric_constructor_with_commitment() {
+        let kp_a = KeyPair::generate();
+        let kp_b = KeyPair::generate();
+        let commitment = b"Slot claim: position 7".to_vec();
+
+        let mut peer_a = TwoGenerals::symmetric_with_commitment(
+            kp_a.clone(),
+            kp_b.public_key().clone(),
+            commitment.clone(),
+        );
+        let mut peer_b = TwoGenerals::symmetric_with_commitment(
+            kp_b.clone(),
+            kp_a.public_key().clone(),
+            commitment,
+        );
+
+        // Run to completion
+        for _ in 0..20 {
+            for msg in peer_a.get_messages_to_send() {
+                peer_b.receive(&msg).unwrap();
+            }
+            for msg in peer_b.get_messages_to_send() {
+                peer_a.receive(&msg).unwrap();
+            }
+
+            if peer_a.is_complete() && peer_b.is_complete() {
+                break;
+            }
+        }
+
+        assert!(peer_a.is_complete());
+        assert!(peer_b.is_complete());
     }
 
     #[test]

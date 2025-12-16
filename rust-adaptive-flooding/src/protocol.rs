@@ -85,6 +85,59 @@ impl AdaptiveTGP {
         }
     }
 
+    /// Create a SYMMETRIC AdaptiveTGP instance.
+    ///
+    /// Party role is determined automatically from public key comparison.
+    /// Both peers can call this with the same constructor and get opposite roles.
+    ///
+    /// # Arguments
+    ///
+    /// * `keypair` - This party's signing key pair
+    /// * `counterparty_public_key` - The counterparty's public key
+    /// * `min_rate` - Minimum packets per second
+    /// * `max_rate` - Maximum packets per second
+    #[must_use]
+    pub fn symmetric(
+        keypair: KeyPair,
+        counterparty_public_key: two_generals::crypto::PublicKey,
+        min_rate: u64,
+        max_rate: u64,
+    ) -> Self {
+        Self {
+            protocol: TwoGenerals::symmetric(keypair, counterparty_public_key),
+            flooder: AdaptiveFlooder::new(min_rate, max_rate),
+            send_buffer: Vec::new(),
+            data_pending: false,
+        }
+    }
+
+    /// Create a SYMMETRIC AdaptiveTGP instance with a custom commitment message.
+    ///
+    /// Party role is determined automatically from public key comparison.
+    ///
+    /// # Arguments
+    ///
+    /// * `keypair` - This party's signing key pair
+    /// * `counterparty_public_key` - The counterparty's public key
+    /// * `commitment_message` - Custom commitment message
+    /// * `min_rate` - Minimum packets per second
+    /// * `max_rate` - Maximum packets per second
+    #[must_use]
+    pub fn symmetric_with_commitment(
+        keypair: KeyPair,
+        counterparty_public_key: two_generals::crypto::PublicKey,
+        commitment_message: Vec<u8>,
+        min_rate: u64,
+        max_rate: u64,
+    ) -> Self {
+        Self {
+            protocol: TwoGenerals::symmetric_with_commitment(keypair, counterparty_public_key, commitment_message),
+            flooder: AdaptiveFlooder::new(min_rate, max_rate),
+            send_buffer: Vec::new(),
+            data_pending: false,
+        }
+    }
+
     /// Get the current protocol state.
     ///
     /// # Returns
