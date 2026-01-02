@@ -30,8 +30,8 @@ open Protocol
     What does a party need to create each message type?
 -/
 
-/-- Can this party create their commitment? Always yes. -/
-def can_create_c (_s : PartyState) : Bool := true
+/-- Can a party create their commitment? Always yes - this is unilateral. -/
+def can_create_c : Bool := true
 
 /-- Can this party create their double proof?
     Requires: received counterparty's commitment. -/
@@ -47,7 +47,7 @@ def can_create_t (s : PartyState) : Bool := s.created_d ∧ s.got_d
 -/
 
 /-- C creation is unilateral - no dependencies. -/
-theorem c_is_unilateral (s : PartyState) : can_create_c s = true := rfl
+theorem c_is_unilateral : can_create_c = true := rfl
 
 /-- D requires counterparty's C. -/
 theorem d_needs_c (s : PartyState) : can_create_d s = true → s.got_c = true := by

@@ -62,48 +62,7 @@ lean_lib «ProtocolVariants» {
   -- Layer 13: Timeout alternatives and Byzantine message handling
 }
 
--- v2: Minimal 6-packet protocol
-lean_lib «MinimalTGP» {
-  srcDir := "v2"
-}
-
-lean_lib «MinimalGraysModel» {
-  srcDir := "v2"
-}
-
-lean_lib «StaticAnalysis» {
-  srcDir := "v2"
-}
-
-lean_lib «FloodingAnalysis» {
-  srcDir := "v2"
-}
-
-lean_lib «ChannelModels» {
-  srcDir := "v2"
-}
-
-lean_lib «HonestAnalysis» {
-  srcDir := "v2"
-}
-
-lean_lib «ChannelProof» {
-  srcDir := "v2"
-}
-
-lean_lib «EpistemicProof» {
-  srcDir := "v2"
-}
-
-lean_lib «LocalDecisionRule» {
-  srcDir := "v2"
-}
-
-lean_lib «FinalSynthesis» {
-  srcDir := "v2"
-}
-
--- v2 Modular Proof Structure (new)
+-- v2: Modular Proof Structure
 lean_lib «Protocol» {
   srcDir := "v2"
 }
