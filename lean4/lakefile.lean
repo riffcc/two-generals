@@ -114,3 +114,7 @@ lean_lib «GrayCore» {
 lean_lib «LocalDetect» {
   srcDir := "v2"
 }
+
+lean_lib «GrayInterp» {
+  srcDir := "v2"
+}
