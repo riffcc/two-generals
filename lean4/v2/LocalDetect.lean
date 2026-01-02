@@ -605,10 +605,9 @@ theorem fair_lossy_exec_simulates_bool (adv : FairLossyAdversary) :
     let (d_a, d_b, a_responds, b_responds) := to_emergence_model exec
     (alice_attacks_exec (alice_exec_view exec) = true) →
     (alice_attacks_local (alice_true_view d_a d_b a_responds b_responds) = true) := by
-  simp only [full_execution_under_fair_lossy, derive_execution, full_participation,
-             to_emergence_model, alice_attacks_exec, alice_exec_view,
-             alice_attacks_local, alice_true_view, V_emerges, response_B]
-  native_decide
+  simp [full_execution_under_fair_lossy, derive_execution, full_participation,
+        to_emergence_model, alice_attacks_exec, alice_exec_view,
+        alice_attacks_local, alice_true_view, V_emerges, response_B]
 
 /-- Simulation theorem for all protocol-generated executions.
     This is the correct quantification: for any execution from derive_execution,

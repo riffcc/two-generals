@@ -409,14 +409,14 @@ def derive_execution (adv : FairLossyAdversary) (deps : CreationDependencies) : 
   let bob_got_c := deps.alice_creates_c  -- Alice floods C, eventually delivered
   let alice_got_c := deps.bob_creates_c  -- Bob floods C, eventually delivered
   -- D creation: depends on receiving C
-  let alice_creates_d := alice_got_c ∧ deps.alice_creates_d_after_c
-  let bob_creates_d := bob_got_c ∧ deps.bob_creates_d_after_c
+  let alice_creates_d := alice_got_c && deps.alice_creates_d_after_c
+  let bob_creates_d := bob_got_c && deps.bob_creates_d_after_c
   -- D delivery: if created and flooding, eventually delivered
   let bob_got_d := alice_creates_d  -- Alice floods D, eventually delivered
   let alice_got_d := bob_creates_d  -- Bob floods D, eventually delivered
   -- T creation: depends on receiving D (and having created D)
-  let alice_creates_t := alice_creates_d ∧ alice_got_d ∧ deps.alice_creates_t_after_d
-  let bob_creates_t := bob_creates_d ∧ bob_got_d ∧ deps.bob_creates_t_after_d
+  let alice_creates_t := alice_creates_d && alice_got_d && deps.alice_creates_t_after_d
+  let bob_creates_t := bob_creates_d && bob_got_d && deps.bob_creates_t_after_d
   -- T delivery: if created and flooding, eventually delivered
   let bob_got_t := alice_creates_t  -- Alice floods T, eventually delivered
   let alice_got_t := bob_creates_t  -- Bob floods T, eventually delivered
@@ -428,7 +428,7 @@ def derive_execution (adv : FairLossyAdversary) (deps : CreationDependencies) : 
                got_c := alice_got_c,
                got_d := alice_got_d,
                got_t := alice_got_t,
-               decision := if alice_creates_t ∧ alice_got_t then some Decision.Attack else none }
+               decision := if alice_creates_t && alice_got_t then some Decision.Attack else none }
     bob := { party := Party.Bob,
              created_c := deps.bob_creates_c,
              created_d := bob_creates_d,
@@ -436,7 +436,7 @@ def derive_execution (adv : FairLossyAdversary) (deps : CreationDependencies) : 
              got_c := bob_got_c,
              got_d := bob_got_d,
              got_t := bob_got_t,
-             decision := if bob_creates_t ∧ bob_got_t then some Decision.Attack else none }
+             decision := if bob_creates_t && bob_got_t then some Decision.Attack else none }
     alice_received_c := alice_got_c
     alice_received_d := alice_got_d
     alice_received_t := alice_got_t
@@ -454,6 +454,121 @@ def full_participation : CreationDependencies := {
   alice_creates_t_after_d := true
   bob_creates_t_after_d := true
 }
+
+/-! ## Channel-Aware Execution Model
+
+    The FAITHFUL model where channel state affects delivery.
+    Asymmetric channels cause asymmetric delivery patterns.
+
+    Key insight:
+    - Working channel: delivery = creation (flooding defeats adversary)
+    - Partitioned channel: delivery = false (no messages get through)
+
+    This is the model where ExecutionState CAN represent asymmetric channels.
+-/
+
+/-- Check if a channel direction allows delivery. -/
+def channel_delivers (state : ChannelState) : Bool :=
+  match state with
+  | ChannelState.Working => true
+  | ChannelState.Partitioned => false
+
+/-- Derive execution state with explicit channel model.
+    Unlike derive_execution, this DOES represent asymmetric delivery.
+
+    Delivery = creation && channel_delivers(direction)
+
+    This allows:
+    - Alice floods D, but if alice_to_bob is Partitioned, Bob never gets it
+    - Asymmetric channel → asymmetric delivery → symmetric ABORT (no attack key)
+-/
+def derive_execution_with_channel (ch : BidirectionalChannel) (deps : CreationDependencies) : ExecutionState :=
+  -- Channel state for each direction
+  let a_to_b := channel_delivers ch.alice_to_bob
+  let b_to_a := channel_delivers ch.bob_to_alice
+  -- C delivery: depends on channel state
+  let bob_got_c := deps.alice_creates_c && a_to_b  -- Alice's C → Bob
+  let alice_got_c := deps.bob_creates_c && b_to_a  -- Bob's C → Alice
+  -- D creation: depends on receiving C
+  let alice_creates_d := alice_got_c && deps.alice_creates_d_after_c
+  let bob_creates_d := bob_got_c && deps.bob_creates_d_after_c
+  -- D delivery: depends on creation AND channel
+  let bob_got_d := alice_creates_d && a_to_b
+  let alice_got_d := bob_creates_d && b_to_a
+  -- T creation: depends on receiving D (and having created D)
+  let alice_creates_t := alice_creates_d && alice_got_d && deps.alice_creates_t_after_d
+  let bob_creates_t := bob_creates_d && bob_got_d && deps.bob_creates_t_after_d
+  -- T delivery: depends on creation AND channel
+  let bob_got_t := alice_creates_t && a_to_b
+  let alice_got_t := bob_creates_t && b_to_a
+  {
+    alice := { party := Party.Alice,
+               created_c := deps.alice_creates_c,
+               created_d := alice_creates_d,
+               created_t := alice_creates_t,
+               got_c := alice_got_c,
+               got_d := alice_got_d,
+               got_t := alice_got_t,
+               decision := if alice_creates_t && alice_got_t then some Decision.Attack else none }
+    bob := { party := Party.Bob,
+             created_c := deps.bob_creates_c,
+             created_d := bob_creates_d,
+             created_t := bob_creates_t,
+             got_c := bob_got_c,
+             got_d := bob_got_d,
+             got_t := bob_got_t,
+             decision := if bob_creates_t && bob_got_t then some Decision.Attack else none }
+    alice_received_c := alice_got_c
+    alice_received_d := alice_got_d
+    alice_received_t := alice_got_t
+    bob_received_c := bob_got_c
+    bob_received_d := bob_got_d
+    bob_received_t := bob_got_t
+  }
+
+/-- On symmetric working channel, derive_execution_with_channel = derive_execution.
+    This shows the two models agree when channel is fully operational.
+    NOTE: The two definitions use different operators (∧ vs &&) but are equal
+    when channel is Working in both directions. -/
+theorem channel_execution_equals_fair_lossy (adv : FairLossyAdversary) (deps : CreationDependencies) :
+    derive_execution_with_channel symmetric_working deps =
+    derive_execution adv deps := by
+  -- Definitions are now identical (both use &&)
+  unfold derive_execution_with_channel derive_execution symmetric_working channel_delivers
+  simp only [Bool.true_and, Bool.and_true]
+
+/-- With partitioned alice_to_bob channel, Bob receives nothing.
+    This is the asymmetric case where one direction is dead. -/
+theorem partitioned_a_to_b_blocks_bob (deps : CreationDependencies)
+    (ch : BidirectionalChannel) (h_part : ch.alice_to_bob = ChannelState.Partitioned) :
+    (derive_execution_with_channel ch deps).bob_received_c = false ∧
+    (derive_execution_with_channel ch deps).bob_received_d = false ∧
+    (derive_execution_with_channel ch deps).bob_received_t = false := by
+  unfold derive_execution_with_channel channel_delivers
+  simp only [h_part, Bool.and_false, Bool.false_and, and_self]
+
+/-- With asymmetric channel (one direction partitioned), no attack key emerges.
+    Both parties abort because bilateral construction requires BOTH channels working.
+    PROOF: Partitioned direction blocks D or T, preventing bilateral completion. -/
+theorem asymmetric_channel_causes_abort (deps : CreationDependencies)
+    (ch : BidirectionalChannel)
+    (h_part : ch.alice_to_bob = ChannelState.Partitioned ∨ ch.bob_to_alice = ChannelState.Partitioned) :
+    let exec := derive_execution_with_channel ch deps
+    let d_a := exec.alice.created_d && exec.bob_received_d
+    let d_b := exec.bob.created_d && exec.alice_received_d
+    let a_responds := exec.alice.created_t && exec.bob_received_t
+    let b_responds := exec.bob.created_t && exec.alice_received_t
+    ¬(d_a = true ∧ d_b = true ∧ a_responds = true ∧ b_responds = true) := by
+  unfold derive_execution_with_channel channel_delivers
+  cases h_part with
+  | inl h_atob =>
+    simp only [h_atob, Bool.and_false, Bool.false_and]
+    intro ⟨h1, _, _, _⟩
+    exact Bool.false_ne_true h1
+  | inr h_btoa =>
+    simp only [h_btoa, Bool.and_false, Bool.false_and]
+    intro ⟨_, h2, _, _⟩
+    exact Bool.false_ne_true h2
 
 /-- Full execution under fair-lossy with full participation.
     State is DERIVED from adversary + dependencies, not hardcoded. -/
@@ -556,8 +671,7 @@ def to_emergence_model (exec : ExecutionState) : Bool × Bool × Bool × Bool :=
     PROOF: Follows from derive_execution semantics, not hardcoding. -/
 theorem fair_lossy_implies_full_oscillation (adv : FairLossyAdversary) :
     to_emergence_model (full_execution_under_fair_lossy adv) = (true, true, true, true) := by
-  simp only [to_emergence_model, full_execution_under_fair_lossy, derive_execution, full_participation]
-  native_decide
+  simp [to_emergence_model, full_execution_under_fair_lossy, derive_execution, full_participation]
 
 /-! ## Bridge Lemmas: Execution Synchronization
 
