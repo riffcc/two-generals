@@ -533,9 +533,7 @@ def derive_execution_with_channel (ch : BidirectionalChannel) (deps : CreationDe
 theorem channel_execution_equals_fair_lossy (adv : FairLossyAdversary) (deps : CreationDependencies) :
     derive_execution_with_channel symmetric_working deps =
     derive_execution adv deps := by
-  -- Definitions are now identical (both use &&)
-  unfold derive_execution_with_channel derive_execution symmetric_working channel_delivers
-  simp only [Bool.true_and, Bool.and_true]
+  simp [derive_execution_with_channel, derive_execution, symmetric_working, channel_delivers]
 
 /-- With partitioned alice_to_bob channel, Bob receives nothing.
     This is the asymmetric case where one direction is dead. -/
@@ -725,8 +723,7 @@ theorem derive_execution_full_sync (adv : FairLossyAdversary) :
     exec.alice_received_t = exec.bob_received_t ∧
     exec.alice_received_d = exec.bob_received_d ∧
     exec.alice.created_t = exec.bob.created_t := by
-  simp only [full_execution_under_fair_lossy, derive_execution, full_participation]
-  trivial
+  simp [full_execution_under_fair_lossy, derive_execution, full_participation]
 
 /-- Delivery equals creation in the fair-lossy closure model.
     This is the definitional property that makes the model work. -/
@@ -736,8 +733,7 @@ theorem derive_execution_delivery_is_creation (adv : FairLossyAdversary) (deps :
     exec.alice_received_d = exec.bob.created_d ∧
     exec.bob_received_t = exec.alice.created_t ∧
     exec.alice_received_t = exec.bob.created_t := by
-  simp only [derive_execution]
-  trivial
+  simp [derive_execution]
 
 /-! ## Summary
 
