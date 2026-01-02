@@ -26,12 +26,14 @@ use crate::crypto::{KeyPair, PublicKey, Signer, Verifier};
 use crate::error::Result;
 use crate::types::{
     Commitment, Decision, DoubleProof, Message, MessagePayload, Party, ProtocolPhase, QuadProof,
-    TripleProof,
+    QuadConfirmation, QuadConfirmationFinal, TripleProof,
 };
 
-/// Protocol state enumeration.
+/// Protocol state enumeration (Full Solve).
 ///
 /// Tracks the current phase of the state machine.
+/// The Full Solve adds Q_CONF and Q_CONF_FINAL phases to ensure
+/// both parties observe mutual readiness before deciding ATTACK.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProtocolState {
     /// Before commitment created.
@@ -44,6 +46,10 @@ pub enum ProtocolState {
     Triple,
     /// Flooding Q_X, awaiting Q_Y.
     Quad,
+    /// Flooding Q_CONF_X, awaiting Q_CONF_Y (Full Solve phase 5).
+    QuadConf,
+    /// Flooding Q_CONF_FINAL_X, awaiting Q_CONF_FINAL_Y (Full Solve phase 6).
+    QuadConfFinal,
     /// Fixpoint achieved — can ATTACK.
     Complete,
     /// Deadline passed — must ABORT.
@@ -60,6 +66,8 @@ impl ProtocolState {
             Self::Double => ProtocolPhase::Double,
             Self::Triple => ProtocolPhase::Triple,
             Self::Quad => ProtocolPhase::Quad,
+            Self::QuadConf => ProtocolPhase::QuadConf,
+            Self::QuadConfFinal => ProtocolPhase::QuadConfFinal,
             Self::Complete => ProtocolPhase::Complete,
             Self::Aborted => ProtocolPhase::Aborted,
         }
@@ -115,12 +123,16 @@ pub struct TwoGenerals {
     own_double: Option<DoubleProof>,
     own_triple: Option<TripleProof>,
     own_quad: Option<QuadProof>,
+    own_quad_conf: Option<QuadConfirmation>,
+    own_quad_conf_final: Option<QuadConfirmationFinal>,
 
     // Counterparty's proof artifacts
     other_commitment: Option<Commitment>,
     other_double: Option<DoubleProof>,
     other_triple: Option<TripleProof>,
     other_quad: Option<QuadProof>,
+    other_quad_conf: Option<QuadConfirmation>,
+    other_quad_conf_final: Option<QuadConfirmationFinal>,
 
     /// Message sequence counter.
     sequence: u64,
@@ -146,10 +158,14 @@ impl TwoGenerals {
             own_double: None,
             own_triple: None,
             own_quad: None,
+            own_quad_conf: None,
+            own_quad_conf_final: None,
             other_commitment: None,
             other_double: None,
             other_triple: None,
             other_quad: None,
+            other_quad_conf: None,
+            other_quad_conf_final: None,
             sequence: 0,
             commitment_message: Self::DEFAULT_COMMITMENT.to_vec(),
         };
@@ -174,10 +190,14 @@ impl TwoGenerals {
             own_double: None,
             own_triple: None,
             own_quad: None,
+            own_quad_conf: None,
+            own_quad_conf_final: None,
             other_commitment: None,
             other_double: None,
             other_triple: None,
             other_quad: None,
+            other_quad_conf: None,
+            other_quad_conf_final: None,
             sequence: 0,
             commitment_message,
         };
@@ -258,10 +278,13 @@ impl TwoGenerals {
         matches!(self.state, ProtocolState::Complete)
     }
 
-    /// Check if this party can safely ATTACK.
+    /// Check if this party can safely ATTACK (Full Solve).
+    ///
+    /// Requires BOTH Q_CONF_FINAL proofs - our own AND the counterparty's.
+    /// This ensures mutual observation of readiness before committing.
     #[must_use]
     pub fn can_attack(&self) -> bool {
-        self.is_complete() && self.own_quad.is_some()
+        self.is_complete() && self.own_quad_conf_final.is_some() && self.other_quad_conf_final.is_some()
     }
 
     /// Get the final decision.
@@ -340,6 +363,7 @@ impl TwoGenerals {
     }
 
     /// Create quaternary proof once we have counterparty's triple (Phase 4).
+    /// Also immediately creates Q_CONF (Full Solve phase 5).
     fn create_quad_proof(&mut self) {
         let own_t = self.own_triple.as_ref().expect("own triple required");
         let other_t = self.other_triple.as_ref().expect("other triple required");
@@ -350,13 +374,63 @@ impl TwoGenerals {
             &other_t.canonical_bytes(),
         );
 
-        self.own_quad = Some(QuadProof::new(
+        let quad = QuadProof::new(
             self.party,
             own_t.clone(),
             other_t.clone(),
             signature,
-        ));
+        );
+        self.own_quad = Some(quad.clone());
         self.state = ProtocolState::Quad;
+
+        // Immediately create Q_CONF (Full Solve)
+        self.create_quad_conf();
+    }
+
+    /// Create quad confirmation once we have our quad proof (Full Solve phase 5).
+    fn create_quad_conf(&mut self) {
+        let quad = self.own_quad.as_ref().expect("own quad required");
+
+        let signer = Signer::new(self.keypair.clone());
+        let msg = {
+            let mut m = quad.canonical_bytes();
+            m.extend_from_slice(b"||");
+            m.extend_from_slice(&quad.hash());
+            m.extend_from_slice(b"||I_HAVE_CONSTRUCTED_Q");
+            m
+        };
+        let signature = signer.sign(&msg);
+
+        self.own_quad_conf = Some(QuadConfirmation::new(
+            self.party,
+            quad.clone(),
+            signature,
+        ));
+        self.state = ProtocolState::QuadConf;
+    }
+
+    /// Create quad confirmation final once we have counterparty's Q_CONF (Full Solve phase 6).
+    fn create_quad_conf_final(&mut self) {
+        let own_conf = self.own_quad_conf.as_ref().expect("own quad conf required");
+        let other_conf = self.other_quad_conf.as_ref().expect("other quad conf required");
+
+        let signer = Signer::new(self.keypair.clone());
+        let msg = {
+            let mut m = own_conf.canonical_bytes();
+            m.extend_from_slice(b"||");
+            m.extend_from_slice(&other_conf.canonical_bytes());
+            m.extend_from_slice(b"||MUTUALLY_LOCKED_IN");
+            m
+        };
+        let signature = signer.sign(&msg);
+
+        self.own_quad_conf_final = Some(QuadConfirmationFinal::new(
+            self.party,
+            own_conf.clone(),
+            other_conf.clone(),
+            signature,
+        ));
+        self.state = ProtocolState::QuadConfFinal;
     }
 
     // =========================================================================
@@ -374,6 +448,8 @@ impl TwoGenerals {
             MessagePayload::DoubleProof(d) => self.receive_double_proof(d),
             MessagePayload::TripleProof(t) => self.receive_triple_proof(t),
             MessagePayload::QuadProof(q) => self.receive_quad_proof(q),
+            MessagePayload::QuadConfirmation(qc) => self.receive_quad_conf(qc),
+            MessagePayload::QuadConfirmationFinal(qcf) => self.receive_quad_conf_final(qcf),
         }
     }
 
@@ -536,8 +612,113 @@ impl TwoGenerals {
 
         self.other_quad = Some(quad.clone());
 
-        // If we have both quad proofs, we're COMPLETE
-        if self.own_quad.is_some() {
+        // Note: Full Solve requires Q_CONF and Q_CONF_FINAL before Complete
+        // Having both quads just means we can create Q_CONF (which create_quad_proof does)
+
+        Ok(true)
+    }
+
+    /// Receive a quad confirmation (Full Solve phase 5).
+    fn receive_quad_conf(&mut self, conf: &QuadConfirmation) -> Result<bool> {
+        // Must be from counterparty
+        if conf.party == self.party {
+            return Ok(false);
+        }
+
+        // Already have it
+        if self.other_quad_conf.is_some() {
+            return Ok(false);
+        }
+
+        // Verify signature
+        let verifier = Verifier::new(self.counterparty_public_key.clone());
+        let msg = {
+            let mut m = conf.quad_proof.canonical_bytes();
+            m.extend_from_slice(b"||");
+            m.extend_from_slice(&conf.quad_hash);
+            m.extend_from_slice(b"||I_HAVE_CONSTRUCTED_Q");
+            m
+        };
+        verifier.verify(&msg, &conf.signature)?;
+
+        // Extract embedded quad if needed
+        if self.other_quad.is_none() {
+            self.other_quad = Some(conf.quad_proof.clone());
+            // Also extract embedded artifacts from the quad
+            if self.other_triple.is_none() {
+                self.other_triple = Some(conf.quad_proof.own_triple.clone());
+            }
+            if self.other_double.is_none() {
+                self.other_double = Some(conf.quad_proof.own_triple.own_double.clone());
+            }
+            if self.other_commitment.is_none() {
+                self.other_commitment = Some(conf.quad_proof.own_triple.own_double.own_commitment.clone());
+            }
+
+            // Cascade state updates
+            if matches!(self.state, ProtocolState::Commitment) && self.own_commitment.is_some() {
+                self.create_double_proof();
+            }
+            if matches!(self.state, ProtocolState::Double) && self.own_double.is_some() {
+                self.create_triple_proof();
+            }
+            if matches!(self.state, ProtocolState::Triple) && self.own_triple.is_some() {
+                self.create_quad_proof();
+            }
+        }
+
+        self.other_quad_conf = Some(conf.clone());
+
+        // If we have our own Q_CONF and now have theirs, create Q_CONF_FINAL
+        if self.own_quad_conf.is_some() && matches!(self.state, ProtocolState::QuadConf) {
+            self.create_quad_conf_final();
+            return Ok(true);
+        }
+
+        Ok(true)
+    }
+
+    /// Receive a quad confirmation final (Full Solve phase 6).
+    fn receive_quad_conf_final(&mut self, conf_final: &QuadConfirmationFinal) -> Result<bool> {
+        // Must be from counterparty
+        if conf_final.party == self.party {
+            return Ok(false);
+        }
+
+        // Already have it
+        if self.other_quad_conf_final.is_some() {
+            return Ok(false);
+        }
+
+        // Verify signature
+        let verifier = Verifier::new(self.counterparty_public_key.clone());
+        let msg = {
+            let mut m = conf_final.own_conf.canonical_bytes();
+            m.extend_from_slice(b"||");
+            m.extend_from_slice(&conf_final.other_conf.canonical_bytes());
+            m.extend_from_slice(b"||MUTUALLY_LOCKED_IN");
+            m
+        };
+        verifier.verify(&msg, &conf_final.signature)?;
+
+        // Extract embedded Q_CONF if needed
+        if self.other_quad_conf.is_none() {
+            self.other_quad_conf = Some(conf_final.own_conf.clone());
+            // Also extract the quad
+            if self.other_quad.is_none() {
+                self.other_quad = Some(conf_final.own_conf.quad_proof.clone());
+            }
+
+            // Cascade state updates if we haven't created our own proofs yet
+            if self.own_quad_conf.is_some() && matches!(self.state, ProtocolState::QuadConf) {
+                self.create_quad_conf_final();
+            }
+        }
+
+        self.other_quad_conf_final = Some(conf_final.clone());
+
+        // If we have both Q_CONF_FINAL, we're COMPLETE
+        if self.own_quad_conf_final.is_some() {
             self.state = ProtocolState::Complete;
             return Ok(true);
         }
@@ -554,13 +735,24 @@ impl TwoGenerals {
     /// In continuous flooding mode, we send our highest available proof.
     /// Higher-level proofs embed lower-level ones, so receiving T_X is
     /// sufficient even if C_X and D_X were lost.
+    ///
+    /// Full Solve: After Q, we send Q_CONF, then Q_CONF_FINAL.
     pub fn get_messages_to_send(&mut self) -> Vec<Message> {
         self.sequence += 1;
         let mut messages = Vec::new();
 
         // Send highest available proof (it embeds all lower ones)
+        // Full Solve adds Q_CONF and Q_CONF_FINAL phases
         let payload = match self.state {
-            ProtocolState::Complete | ProtocolState::Quad => {
+            ProtocolState::Complete | ProtocolState::QuadConfFinal => {
+                // Even after complete, keep flooding Q_CONF_FINAL so counterparty can complete
+                self.own_quad_conf_final.as_ref().map(|qcf| MessagePayload::QuadConfirmationFinal(qcf.clone()))
+            }
+            ProtocolState::QuadConf => {
+                self.own_quad_conf.as_ref().map(|qc| MessagePayload::QuadConfirmation(qc.clone()))
+            }
+            ProtocolState::Quad => {
+                // This state is transient - we immediately create Q_CONF
                 self.own_quad.as_ref().map(|q| MessagePayload::QuadProof(q.clone()))
             }
             ProtocolState::Triple => {
@@ -613,6 +805,10 @@ impl core::fmt::Debug for TwoGenerals {
             .field("has_other_triple", &self.other_triple.is_some())
             .field("has_own_quad", &self.own_quad.is_some())
             .field("has_other_quad", &self.other_quad.is_some())
+            .field("has_own_quad_conf", &self.own_quad_conf.is_some())
+            .field("has_other_quad_conf", &self.other_quad_conf.is_some())
+            .field("has_own_quad_conf_final", &self.own_quad_conf_final.is_some())
+            .field("has_other_quad_conf_final", &self.other_quad_conf_final.is_some())
             .finish()
     }
 }

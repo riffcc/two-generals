@@ -442,6 +442,193 @@ impl QuadProof {
     }
 }
 
+/// Phase 5: Quaternary Confirmation (Q_CONF)
+///
+/// `Q_CONF_X = Sign_X(Q_X ∥ h(Q_X) ∥ "I have constructed Q")`
+///
+/// Created immediately upon constructing Q_X. Signals "I have reached
+/// the epistemic fixpoint" and is flooded continuously.
+///
+/// # Full Solve Protocol
+///
+/// The base protocol (C → D → T → Q) has an edge case: party A might
+/// construct Q_A and decide ATTACK while party B hasn't yet received T_A.
+/// Q_CONF adds mutual observation of readiness.
+///
+/// # Epistemic depth: ω + 1
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuadConfirmation {
+    /// The party creating this confirmation.
+    pub party: Party,
+    /// This party's quad proof.
+    pub quad_proof: QuadProof,
+    /// BLAKE3 hash of the quad proof for compact verification.
+    pub quad_hash: [u8; 32],
+    /// Signature over the confirmation.
+    pub signature: Signature,
+}
+
+impl QuadConfirmation {
+    /// Creates a new quad confirmation.
+    #[must_use]
+    pub fn new(party: Party, quad_proof: QuadProof, signature: Signature) -> Self {
+        let quad_hash = quad_proof.hash();
+        Self {
+            party,
+            quad_proof,
+            quad_hash,
+            signature,
+        }
+    }
+
+    /// The message that was signed to create this confirmation.
+    #[must_use]
+    pub fn message_to_sign(&self) -> Vec<u8> {
+        let mut msg = Vec::with_capacity(8192);
+        msg.extend_from_slice(&self.quad_proof.canonical_bytes());
+        msg.extend_from_slice(b"||");
+        msg.extend_from_slice(&self.quad_hash);
+        msg.extend_from_slice(b"||I_HAVE_CONSTRUCTED_Q");
+        msg
+    }
+
+    /// Serialize to canonical bytes for embedding in higher proofs.
+    #[must_use]
+    pub fn canonical_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(8192);
+        bytes.extend_from_slice(b"QCONF:");
+        bytes.extend_from_slice(self.party.name_bytes());
+        bytes.push(b':');
+        bytes.extend_from_slice(&self.quad_proof.canonical_bytes());
+        bytes.push(b':');
+        bytes.extend_from_slice(&self.quad_hash);
+        bytes.push(b':');
+        bytes.extend_from_slice(self.signature.as_bytes());
+        bytes
+    }
+
+    /// BLAKE3 hash of the canonical representation.
+    #[must_use]
+    pub fn hash(&self) -> [u8; 32] {
+        blake3::hash(&self.canonical_bytes()).into()
+    }
+
+    /// The public key of the party who created this confirmation.
+    #[must_use]
+    pub fn public_key(&self) -> &PublicKey {
+        self.quad_proof.public_key()
+    }
+}
+
+/// Phase 6: Quaternary Confirmation Final (Q_CONF_FINAL)
+///
+/// `Q_CONF_FINAL_X = Sign_X(Q_CONF_X ∥ Q_CONF_Y ∥ "Mutually locked in")`
+///
+/// Created only after receiving the counterparty's Q_CONF. Signals the
+/// behavior change: "I received your confirmation and am now locked in
+/// to ATTACK."
+///
+/// # Full Solve Decision Rule
+///
+/// Decide ATTACK if and only if:
+/// 1. Have constructed RECEIPT (proves bilateral completion), AND
+/// 2. Have received Q_CONF_FINAL_Y (proves partner is locked in)
+///
+/// # Epistemic depth: ω + 2
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct QuadConfirmationFinal {
+    /// The party creating this final confirmation.
+    pub party: Party,
+    /// This party's quad confirmation.
+    pub own_conf: QuadConfirmation,
+    /// The counterparty's quad confirmation.
+    pub other_conf: QuadConfirmation,
+    /// Signature over the final confirmation.
+    pub signature: Signature,
+}
+
+impl QuadConfirmationFinal {
+    /// Creates a new quad confirmation final.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the party labels are inconsistent.
+    #[must_use]
+    pub fn new(
+        party: Party,
+        own_conf: QuadConfirmation,
+        other_conf: QuadConfirmation,
+        signature: Signature,
+    ) -> Self {
+        debug_assert_eq!(own_conf.party, party, "Own conf party mismatch");
+        debug_assert_ne!(other_conf.party, party, "Other conf must be from counterparty");
+
+        Self {
+            party,
+            own_conf,
+            other_conf,
+            signature,
+        }
+    }
+
+    /// The message that was signed to create this final confirmation.
+    #[must_use]
+    pub fn message_to_sign(&self) -> Vec<u8> {
+        let mut msg = Vec::with_capacity(16384);
+        msg.extend_from_slice(&self.own_conf.canonical_bytes());
+        msg.extend_from_slice(b"||");
+        msg.extend_from_slice(&self.other_conf.canonical_bytes());
+        msg.extend_from_slice(b"||MUTUALLY_LOCKED_IN");
+        msg
+    }
+
+    /// Serialize to canonical bytes.
+    #[must_use]
+    pub fn canonical_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(16384);
+        bytes.extend_from_slice(b"QCONF_FINAL:");
+        bytes.extend_from_slice(self.party.name_bytes());
+        bytes.push(b':');
+        bytes.extend_from_slice(&self.own_conf.canonical_bytes());
+        bytes.push(b':');
+        bytes.extend_from_slice(&self.other_conf.canonical_bytes());
+        bytes.push(b':');
+        bytes.extend_from_slice(self.signature.as_bytes());
+        bytes
+    }
+
+    /// BLAKE3 hash of the canonical representation.
+    #[must_use]
+    pub fn hash(&self) -> [u8; 32] {
+        blake3::hash(&self.canonical_bytes()).into()
+    }
+
+    /// The public key of the party who created this final confirmation.
+    #[must_use]
+    pub fn public_key(&self) -> &PublicKey {
+        self.own_conf.public_key()
+    }
+
+    /// Compute the bilateral receipt - identical for both parties.
+    ///
+    /// The receipt is: `h(Q_CONF_FINAL_A ∥ Q_CONF_FINAL_B)` with
+    /// deterministic ordering by party name.
+    #[must_use]
+    pub fn compute_receipt(&self, other_final: &QuadConfirmationFinal) -> [u8; 32] {
+        let (alice_final, bob_final) = if self.party == Party::Alice {
+            (self, other_final)
+        } else {
+            (other_final, self)
+        };
+
+        let mut receipt_input = Vec::with_capacity(32768);
+        receipt_input.extend_from_slice(&alice_final.canonical_bytes());
+        receipt_input.extend_from_slice(b"||");
+        receipt_input.extend_from_slice(&bob_final.canonical_bytes());
+        blake3::hash(&receipt_input).into()
+    }
+}
+
 /// A network message carrying a proof artifact.
 ///
 /// Messages are continuously flooded until the next phase is reached.
@@ -456,7 +643,7 @@ pub struct Message {
     pub payload: MessagePayload,
 }
 
-/// The payload of a message — one of the four proof types.
+/// The payload of a message — one of the six proof types (Full Solve).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum MessagePayload {
     /// Phase 1: Commitment.
@@ -467,10 +654,14 @@ pub enum MessagePayload {
     TripleProof(TripleProof),
     /// Phase 4: Quad proof.
     QuadProof(QuadProof),
+    /// Phase 5: Quad confirmation (Full Solve).
+    QuadConfirmation(QuadConfirmation),
+    /// Phase 6: Quad confirmation final (Full Solve).
+    QuadConfirmationFinal(QuadConfirmationFinal),
 }
 
 impl Message {
-    /// Returns the protocol phase (1-4) of this message.
+    /// Returns the protocol phase (1-6) of this message.
     #[must_use]
     pub const fn phase(&self) -> u8 {
         match &self.payload {
@@ -478,11 +669,13 @@ impl Message {
             MessagePayload::DoubleProof(_) => 2,
             MessagePayload::TripleProof(_) => 3,
             MessagePayload::QuadProof(_) => 4,
+            MessagePayload::QuadConfirmation(_) => 5,
+            MessagePayload::QuadConfirmationFinal(_) => 6,
         }
     }
 }
 
-/// Protocol phases corresponding to proof levels.
+/// Protocol phases corresponding to proof levels (Full Solve).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
 pub enum ProtocolPhase {
@@ -496,10 +689,14 @@ pub enum ProtocolPhase {
     Triple = 3,
     /// Flooding Q_X.
     Quad = 4,
+    /// Flooding Q_CONF_X (Full Solve phase 5).
+    QuadConf = 5,
+    /// Flooding Q_CONF_FINAL_X (Full Solve phase 6).
+    QuadConfFinal = 6,
     /// Fixpoint achieved — ready to ATTACK.
-    Complete = 5,
+    Complete = 7,
     /// Deadline expired without fixpoint — ABORT.
-    Aborted = 6,
+    Aborted = 8,
 }
 
 impl ProtocolPhase {
@@ -512,6 +709,8 @@ impl ProtocolPhase {
             Self::Double => "Double",
             Self::Triple => "Triple",
             Self::Quad => "Quad",
+            Self::QuadConf => "QuadConf",
+            Self::QuadConfFinal => "QuadConfFinal",
             Self::Complete => "Complete",
             Self::Aborted => "Aborted",
         }
