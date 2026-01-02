@@ -90,13 +90,13 @@ def t_proves : SenderProof := {
 /-- Axiom: Cryptographic signatures are unforgeable.
     If you receive a signed message, the signer created it. -/
 axiom signature_unforgeable :
-  ∀ (party : Party) (msg : Message),
+  ∀ (_party : Party) (_msg : Message),
   -- If you receive msg signed by party, then party created msg
   True  -- The actual crypto proof is outside Lean's scope
 
 /-- When Alice has T_B, she has proof of Bob's complete state. -/
 theorem t_b_proves_bob_state (s : ProtocolState)
-    (h : s.alice.got_t = true) :
+    (_h : s.alice.got_t = true) :
     -- T_B proves Bob created T_B
     -- T_B proves Bob had D_A (embedded)
     -- T_B proves Bob created D_B (prerequisite)
