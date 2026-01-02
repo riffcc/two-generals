@@ -102,3 +102,7 @@ lean_lib «Solution» {
 lean_lib «Emergence» {
   srcDir := "v2"
 }
+
+lean_lib «Epistemic» {
+  srcDir := "v2"
+}
