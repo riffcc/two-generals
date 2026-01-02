@@ -112,12 +112,7 @@ def is_symmetric (o : Protocol.Outcome) : Bool :=
     participating, it eventually gets delivered (fair-lossy guarantee).
 -/
 def reachable_fair_lossy (r : RawDelivery) : Bool :=
-  -- Constraint 1: If Alice could create D_A (has c_b) and D_A should be flooded,
-  -- then under fair-lossy, d_a must eventually be true OR Alice is partitioned
-  let alice_has_c_b := r.c_b
-  let bob_has_c_a := r.c_a
-
-  -- Constraint 2: T delivery consistency
+  -- T delivery consistency constraint
   -- If both parties created T (which requires having both D's), then under
   -- fair-lossy, if one T is delivered, the other must eventually be too
   -- (both are flooding, fair-lossy guarantees delivery)
@@ -157,6 +152,9 @@ theorem all_reachable_symmetric (r : RawDelivery) (_ : reachable_fair_lossy r = 
 
     If both parties complete the protocol (create all messages) and the channel
     is fair-lossy in both directions, then the outcome is CoordinatedAttack.
+
+    PROOF: Use fair_lossy_implies_full_oscillation to establish the tuple is (T,T,T,T),
+    then prove get_outcome on the concrete tuple equals CoordinatedAttack.
 -/
 theorem fair_lossy_liveness :
     ∀ (adv : FairLossyAdversary),
@@ -165,7 +163,11 @@ theorem fair_lossy_liveness :
     Emergence.get_outcome (Emergence.make_state d_a d_b a_responds b_responds).attack_key
       = Emergence.Outcome.CoordinatedAttack := by
   intro adv
-  simp only [full_execution_under_fair_lossy, to_emergence_model]
+  -- First, establish that the tuple is (true, true, true, true)
+  have h_tuple := fair_lossy_implies_full_oscillation adv
+  -- Rewrite using this fact
+  simp only [h_tuple]
+  -- Now the goal is on concrete booleans, can use native_decide
   native_decide
 
 /-! ## State Space
@@ -311,7 +313,7 @@ theorem no_v_means_abort (d_a d_b a_responds b_responds : Bool) :
     v_not_emerged d_a d_b = true →
     state_outcome (d_a, d_b, a_responds, b_responds) = Outcome.CoordinatedAbort := by
   intro h
-  simp only [v_not_emerged, Bool.not_eq_true'] at h
+  simp only [v_not_emerged] at h
   simp only [state_outcome, get_outcome, make_state]
   cases d_a <;> cases d_b <;> simp_all [V_emerges, attack_key_emerges]
 
