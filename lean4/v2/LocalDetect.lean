@@ -529,6 +529,59 @@ theorem fair_lossy_wellformed (adv : FairLossyAdversary) :
   simp only [full_execution_under_fair_lossy]
   exact derive_execution_wellformed adv full_participation
 
+/-! ## Channel-Aware Execution Model
+
+    The channel-aware model (derive_execution_with_channel) allows representing
+    asymmetric channel states where one direction is Partitioned.
+
+    Key insight: asymmetric channels cause asymmetric DELIVERY, but the
+    emergent construction ensures symmetric OUTCOMES (both attack or both abort).
+-/
+
+/-- An execution is GeneratedWithChannel if it comes from the channel-aware model. -/
+def GeneratedWithChannel (exec : ExecutionState) : Prop :=
+  ∃ ch deps, exec = derive_execution_with_channel ch deps
+
+/-- derive_execution_with_channel produces well-formed executions.
+    PROOF: Channel state only affects delivery, not creation dependencies. -/
+theorem derive_execution_with_channel_wellformed (ch : BidirectionalChannel) (deps : CreationDependencies) :
+    WellFormed (derive_execution_with_channel ch deps) := by
+  simp [WellFormed, derive_execution_with_channel, channel_delivers]
+  constructor
+  · intro h; simp_all
+  constructor
+  · intro h; simp_all
+  constructor
+  · intro h; simp_all
+  constructor
+  · intro h; simp_all
+  constructor
+  · intro h; simp_all
+  · intro h; simp_all
+
+/-- On symmetric working channel with full participation, views agree.
+    This is the "happy path" where both channels work and both parties participate.
+    NOTE: For arbitrary deps, views may not agree because deps can be asymmetric.
+    Full participation ensures symmetric behavior. -/
+theorem symmetric_channel_views_agree :
+    let exec := derive_execution_with_channel symmetric_working full_participation
+    alice_attacks_exec (alice_exec_view exec) =
+    bob_attacks_exec (bob_exec_view exec) := by
+  native_decide
+
+/-- On partitioned channel, at least one party cannot attack.
+    If either direction is partitioned, the bilateral loop fails. -/
+theorem partitioned_channel_no_attack (ch : BidirectionalChannel) (deps : CreationDependencies)
+    (h_part : ch.alice_to_bob = ChannelState.Partitioned ∨ ch.bob_to_alice = ChannelState.Partitioned) :
+    let exec := derive_execution_with_channel ch deps
+    alice_attacks_exec (alice_exec_view exec) = false ∨
+    bob_attacks_exec (bob_exec_view exec) = false := by
+  simp [derive_execution_with_channel, channel_delivers,
+        alice_attacks_exec, bob_attacks_exec, alice_exec_view, bob_exec_view]
+  cases h_part with
+  | inl h_atob => simp [h_atob]
+  | inr h_btoa => simp [h_btoa]
+
 /-- T_B delivery implies bilateral prerequisites (for well-formed executions).
     If Alice received T_B, then Bob created T_B, which requires:
     - Bob had D_A (from Alice)
