@@ -129,21 +129,50 @@ This result has been interpreted as an impossibility: if common knowledge is req
 
 \subsection{Network Model}
 
-We consider two parties, Alice ($A$) and Bob ($B$), communicating over a \emph{fair-lossy channel}:
+We consider two parties, Alice ($A$) and Bob ($B$), communicating over a channel. The key contribution of this work is identifying the \emph{precise boundary} between possible and impossible coordination by formalizing a hierarchy of channel models.
 
-\begin{definition}[Fair-Lossy Channel]
-A channel is \emph{fair-lossy} if for any message sent infinitely often, the probability of eventual delivery is 1. Formally, if party $X$ floods message $m$ continuously, then $\Pr[\text{$Y$ receives $m$}] = 1$.
+\subsubsection{The Channel Hierarchy}
+
+We define five channel classes, ordered from weakest to strongest guarantees:
+
+\begin{center}
+\begin{tabular}{llp{5.5cm}}
+\toprule
+\textbf{Model} & \textbf{Adversary Power} & \textbf{Real-World Analog} \\
+\midrule
+No Channel & Total isolation & Physically impossible to communicate \\
+Unreliable & Can drop ALL messages forever & Gray's model (worst-case) \\
+Real-Unreliable & High loss but not permanent 100\% & Satellite, mobile, hostile RF \\
+Fair-Lossy & Cannot block infinite flooding & TCP/IP, any engineered network \\
+Reliable & All messages delivered & Idealized model \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{definition}[Unreliable Channel (Gray's Model)]
+A channel is \emph{unreliable} if the adversary has unbounded power: for any message $m$ and any number of copies $n$, the adversary may drop all $n$ copies forever. This includes permanent total loss as a valid adversary strategy.
 \end{definition}
 
-This is weaker than reliable delivery: individual messages may be lost, reordered, or duplicated, but persistent flooding guarantees eventual delivery.
+\begin{definition}[Fair-Lossy Channel]
+\label{def:fairlossy}
+A channel is \emph{fair-lossy} if for any message type flooded continuously, the adversary cannot block all copies. Formally, if party $X$ floods message $m$, then at least one copy is eventually delivered:
+\[
+\textsf{Flooding}(m) \Rightarrow \exists k.\, \textsf{Delivered}(m, k)
+\]
+\end{definition}
 
-\subsection{Why Fair-Lossy Is Not an Additional Assumption}
+\begin{proposition}[Strict Inclusion]
+\label{prop:strict}
+Fair-lossy $\subsetneq$ Unreliable. Every fair-lossy adversary is an unreliable adversary, but not conversely. The ``drop everything forever'' adversary is unreliable but not fair-lossy.
+\end{proposition}
 
-A critical observation: the fair-lossy assumption is \textbf{not} an enrichment of Gray's model---it is the \emph{only non-degenerate interpretation} of ``unreliable channel.''
+\subsubsection{Gray's Model Includes No-Channel}
+
+A critical observation: Gray's unreliable model includes the \emph{no-channel} adversary---one that drops 100\% of messages forever. This is mathematically valid but represents a degenerate case.
 
 \begin{proposition}[Non-Degeneracy of Communication]
 \label{prop:nondegen}
-In any physically meaningful model where agents can act, a ``channel that may lose messages'' must be interpreted as fair-lossy. The alternative---a channel that \emph{never} delivers \emph{any} message---is not an ``unreliable channel'' but the \emph{absence} of a channel.
+In any physically meaningful model where agents can act, a ``channel that may lose messages'' must have nonzero delivery probability. The alternative---a channel that \emph{never} delivers \emph{any} message---is not an ``unreliable channel'' but the \emph{absence} of a channel.
 \end{proposition}
 
 \begin{proof}[Argument]
@@ -155,21 +184,26 @@ Consider two generals on opposing hills. If they are \emph{alive} and capable of
     \item Simply \emph{attack}---the act of attacking is itself observable
 \end{itemize}
 
-For \emph{zero} communication to be possible, we must suppress:
-\begin{itemize}
-    \item All messengers
-    \item All visual line-of-sight
-    \item All sound propagation
-    \item All pre-shared conventions
-    \item All observable movement before decision time
-\end{itemize}
+For \emph{zero} communication to be possible, we must suppress all messengers, all visual line-of-sight, all sound propagation, all pre-shared conventions, and all observable movement before decision time.
 
 But if no action can be observed, no action can occur. A world with zero communication is a world where everyone is \emph{dead} or \emph{frozen}---not a challenging coordination scenario, but a trivial one where the problem does not arise.
-
-Therefore: any world where the Coordinated Attack Problem is \emph{meaningful} (live agents, possible actions) is a world where \emph{some} channel exists with nonzero capacity. Fair-lossy is simply the formal statement that this channel, while arbitrarily unreliable, is not identically zero.
 \end{proof}
 
-This observation is crucial: Gray's impossibility theorem, if interpreted to include permanently-silent channels, applies only to a \emph{degenerate} model that does not correspond to the intuitive ``two generals'' story. The physically meaningful interpretation---unreliable but live---is exactly fair-lossy.
+\subsubsection{The Model Separation Theorem}
+
+Our formal contribution is not to ``refute'' Gray but to \textbf{precisely characterize the boundary}:
+
+\begin{theorem}[Model Separation]
+\label{thm:modelsep}
+Gray's impossibility and TGP's possibility are \emph{consistent}:
+\begin{enumerate}
+    \item Under \emph{unreliable} channels (Gray's model), no protocol achieves Safety $\land$ TerminationAll $\land$ Validity.
+    \item Under \emph{fair-lossy} channels, TGP achieves Safety $\land$ Termination $\land$ Validity.
+\end{enumerate}
+These are different quantifications over adversaries. The adversary that breaks Gray's trilemma (drop all copies forever) does not exist in the fair-lossy model.
+\end{theorem}
+
+This is not ``Gray was wrong''---Gray's theorem is correct under his assumptions. Our contribution is to show that his assumptions include a degenerate case (no-channel) that does not correspond to the intuitive ``two generals'' story, and that under the physically meaningful interpretation (fair-lossy), coordination \emph{is} achievable.
 
 \subsection{Cryptographic Primitives}
 
