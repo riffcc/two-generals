@@ -7,7 +7,7 @@
   This file formalizes the "third can of paint" construction:
 
     1. Forward pass:  General A → B, General B → A  (bilateral lock: D_A, D_B)
-    2. V emerges:     A shared construct is born from the lock (like DH shared secret)
+    2. V emerges:     A shared construct is born from the lock
     3. Reverse pass:  Both must respond to complete the construction
     4. Attack key:    Emerges IFF all three components exist (A's part, B's part, V)
 
@@ -21,10 +21,11 @@
     - no_asymmetric_outcomes: Asymmetric outcomes are impossible
     - attack_is_emergent: Attack ↔ (A_responded ∧ B_responded ∧ V_exists)
 
-  This construction is analogous to Diffie-Hellman key exchange:
-    - Neither party knows the shared secret until both contribute
-    - The secret doesn't exist until both exponents are combined
-    - A partition after one contribution means no shared secret
+  NOTE ON DH ANALOGY LIMITATION:
+  Standard Diffie-Hellman does NOT have bilateral non-possession: if Alice receives
+  g^b but Bob never receives g^a, Alice CAN unilaterally compute g^ab.
+  TGP's attack_key is STRONGER than DH: it requires BOTH parties to complete the
+  entire oscillation. The "third can of paint" metaphor is more accurate than DH.
 
   Author: Wings@riff.cc (Riff Labs)
   Date: January 2026
@@ -39,14 +40,12 @@ open Protocol
 /-! ## The Shared Construct (V)
 
     V is not a party. V is the RELATIONSHIP between the parties.
-    V emerges from the bilateral lock (D_A ∧ D_B), analogous to how
-    a Diffie-Hellman shared secret emerges from g^a and g^b.
+    V emerges from the bilateral lock (D_A ∧ D_B).
 
     V's existence proves the bilateral lock exists.
 -/
 
-/-- The shared construct V: emerges from bilateral lock.
-    Analogous to the DH shared secret S = g^(ab). -/
+/-- The shared construct V: emerges from bilateral lock. -/
 structure SharedConstruct where
   /-- V's identity: cryptographically derived from hash(D_A || D_B) -/
   identity : Nat
