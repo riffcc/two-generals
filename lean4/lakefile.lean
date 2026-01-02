@@ -106,3 +106,11 @@ lean_lib «Emergence» {
 lean_lib «Epistemic» {
   srcDir := "v2"
 }
+
+lean_lib «GrayCore» {
+  srcDir := "v2"
+}
+
+lean_lib «LocalDetect» {
+  srcDir := "v2"
+}
