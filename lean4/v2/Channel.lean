@@ -559,6 +559,72 @@ theorem fair_lossy_implies_full_oscillation (adv : FairLossyAdversary) :
   simp only [to_emergence_model, full_execution_under_fair_lossy, derive_execution, full_participation]
   native_decide
 
+/-! ## Bridge Lemmas: Execution Synchronization
+
+    These lemmas expose the structural properties of derive_execution that
+    LocalDetect.lean needs for the exec_local_views_agree theorem.
+
+    KEY INSIGHT: derive_execution models the FAIR-LOSSY CLOSURE where
+    "created implies eventually-delivered". The adversary parameter is
+    used only for soundness proofs (Prop level), not Bool computation.
+
+    This means:
+    - bob_received_d = alice.created_d (if Alice creates D, Bob gets it)
+    - alice_received_t = bob.created_t (if Bob creates T, Alice gets it)
+    - etc.
+
+    These are NOT "sync assumptions" - they're definitional consequences
+    of the fair-lossy model where flooding guarantees delivery.
+-/
+
+/-- Normalization: to_emergence_model on derive_execution depends only on deps.
+    The adversary parameter does not affect the Bool computation. -/
+theorem to_emergence_normalization (adv₁ adv₂ : FairLossyAdversary) (deps : CreationDependencies) :
+    to_emergence_model (derive_execution adv₁ deps) =
+    to_emergence_model (derive_execution adv₂ deps) := by
+  simp only [to_emergence_model, derive_execution]
+
+/-- derive_execution produces symmetric T-delivery under full participation.
+    PROOF: Under full participation, alice.created_t = bob.created_t
+    and alice_received_t = bob.created_t, bob_received_t = alice.created_t. -/
+theorem derive_execution_t_sync (adv : FairLossyAdversary) :
+    let exec := full_execution_under_fair_lossy adv
+    exec.alice_received_t = exec.bob_received_t := by
+  simp only [full_execution_under_fair_lossy, derive_execution, full_participation]
+
+/-- derive_execution produces symmetric D-delivery under full participation. -/
+theorem derive_execution_d_sync (adv : FairLossyAdversary) :
+    let exec := full_execution_under_fair_lossy adv
+    exec.alice_received_d = exec.bob_received_d := by
+  simp only [full_execution_under_fair_lossy, derive_execution, full_participation]
+
+/-- derive_execution produces symmetric T-creation under full participation. -/
+theorem derive_execution_create_sync (adv : FairLossyAdversary) :
+    let exec := full_execution_under_fair_lossy adv
+    exec.alice.created_t = exec.bob.created_t := by
+  simp only [full_execution_under_fair_lossy, derive_execution, full_participation]
+
+/-- Combined sync theorem for full participation.
+    This is what LocalDetect.exec_local_views_agree needs. -/
+theorem derive_execution_full_sync (adv : FairLossyAdversary) :
+    let exec := full_execution_under_fair_lossy adv
+    exec.alice_received_t = exec.bob_received_t ∧
+    exec.alice_received_d = exec.bob_received_d ∧
+    exec.alice.created_t = exec.bob.created_t := by
+  simp only [full_execution_under_fair_lossy, derive_execution, full_participation]
+  trivial
+
+/-- Delivery equals creation in the fair-lossy closure model.
+    This is the definitional property that makes the model work. -/
+theorem derive_execution_delivery_is_creation (adv : FairLossyAdversary) (deps : CreationDependencies) :
+    let exec := derive_execution adv deps
+    exec.bob_received_d = exec.alice.created_d ∧
+    exec.alice_received_d = exec.bob.created_d ∧
+    exec.bob_received_t = exec.alice.created_t ∧
+    exec.alice_received_t = exec.bob.created_t := by
+  simp only [derive_execution]
+  trivial
+
 /-! ## Summary
 
     This file establishes the fair-lossy channel model:

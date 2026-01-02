@@ -298,11 +298,11 @@ structure BobTrueLocalView where
 /-- Alice attacks IFF she has valid T_B.
     No d_a in the signature - it's INFERRED from T_B validity. -/
 def alice_attacks_local (view : AliceTrueLocalView) : Bool :=
-  view.received_D_B ∧ view.received_valid_T_B ∧ view.sent_T_A
+  view.received_D_B && view.received_valid_T_B && view.sent_T_A
 
 /-- Bob attacks IFF he has valid T_A. -/
 def bob_attacks_local (view : BobTrueLocalView) : Bool :=
-  view.received_D_A ∧ view.received_valid_T_A ∧ view.sent_T_B
+  view.received_D_A && view.received_valid_T_A && view.sent_T_B
 
 /-- CRITICAL THEOREM: Valid T_B implies d_a (Bob had D_A).
     This is the proof-stapling property that makes local inference work.
@@ -448,11 +448,11 @@ def bob_exec_view (exec : ExecutionState) : BobExecView := {
 
 /-- Alice attacks from her execution view IFF she has all evidence. -/
 def alice_attacks_exec (view : AliceExecView) : Bool :=
-  view.received_D_B ∧ view.received_T_B ∧ view.sent_T_A
+  view.received_D_B && view.received_T_B && view.sent_T_A
 
 /-- Bob attacks from his execution view IFF he has all evidence. -/
 def bob_attacks_exec (view : BobExecView) : Bool :=
-  view.received_D_A ∧ view.received_T_A ∧ view.sent_T_B
+  view.received_D_A && view.received_T_A && view.sent_T_B
 
 /-- Extract 3-way Bool conjunction into Prop conjunction. -/
 theorem and3_eq_true {a b c : Bool} :
