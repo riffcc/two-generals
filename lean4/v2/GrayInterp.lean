@@ -16,6 +16,7 @@
 import GrayCore
 import Channel
 import Emergence
+import LocalDetect
 
 namespace GrayInterp
 
@@ -50,6 +51,44 @@ def P_TGP : GrayCore.ProtocolSpec where
     | some d => some (protoDecisionToGray d)
     | none => none
 
+/-! ## Semantics-Derived Decision
+
+  The attack/abort decision is computed from ExecutionState via:
+  1. Channel.to_emergence_model: ExecutionState → (d_a, d_b, a_responds, b_responds)
+  2. Emergence.make_state: booleans → EmergenceState (with attack_key)
+  3. attack_key.isSome determines Attack vs Abort
+-/
+
+/-- Global "attack happened" bit, computed from the derived emergence model. -/
+def attacks_global (es : Channel.ExecutionState) : Bool :=
+  let (d_a, d_b, a_responds, b_responds) := Channel.to_emergence_model es
+  (Emergence.make_state d_a d_b a_responds b_responds).attack_key.isSome
+
+/-- Derive protocol decision from ExecutionState via emergence model. -/
+def decision_from_execState (es : Channel.ExecutionState) : Protocol.Decision :=
+  if attacks_global es then Protocol.Decision.Attack else Protocol.Decision.Abort
+
+/-- Hinge lemma: Alice's local attack predicate matches the global emergent bit. -/
+theorem alice_local_iff_attacks_global (es : Channel.ExecutionState) :
+    (let (d_a, d_b, a_responds, b_responds) := Channel.to_emergence_model es
+     LocalDetect.alice_attacks_local (LocalDetect.alice_true_view d_a d_b a_responds b_responds))
+    ↔ attacks_global es := by
+  rcases h : Channel.to_emergence_model es with ⟨d_a, d_b, a_responds, b_responds⟩
+  simpa [attacks_global, h] using
+    (LocalDetect.local_matches_global d_a d_b a_responds b_responds)
+
+/-- Hinge lemma: Bob's local attack predicate matches the global emergent bit. -/
+theorem bob_local_iff_attacks_global (es : Channel.ExecutionState) :
+    (let (d_a, d_b, a_responds, b_responds) := Channel.to_emergence_model es
+     LocalDetect.bob_attacks_local (LocalDetect.bob_true_view d_a d_b a_responds b_responds))
+    ↔ attacks_global es := by
+  rcases h : Channel.to_emergence_model es with ⟨d_a, d_b, a_responds, b_responds⟩
+  have hAlice := LocalDetect.local_matches_global d_a d_b a_responds b_responds
+  have hAgree := LocalDetect.local_views_agree d_a d_b a_responds b_responds
+  simp only [attacks_global, h]
+  rw [← hAgree]
+  exact hAlice
+
 /-! ## Channel Model -/
 
 /-- Reuse Channel's BidirectionalChannel type. -/
@@ -64,6 +103,43 @@ def both_working (ch : BidirectionalChannel) : Bool :=
 def both_partitioned (ch : BidirectionalChannel) : Bool :=
   ch.alice_to_bob == Channel.ChannelState.Partitioned &&
   ch.bob_to_alice == Channel.ChannelState.Partitioned
+
+/-! ## ExecutionState from BidirectionalChannel
+
+  Construct the execution state that results from running TGP over a channel.
+  The key semantic property: both_working ↔ full oscillation ↔ attacks_global.
+-/
+
+/-- Construct an ExecutionState from a BidirectionalChannel.
+    If both directions work, we get full oscillation. Otherwise, oscillation is incomplete. -/
+def execState_of (ch : BidirectionalChannel) : Channel.ExecutionState :=
+  let w := both_working ch
+  { alice := { party := Protocol.Party.Alice
+               created_c := true, created_d := w, created_t := w
+               got_c := w, got_d := w, got_t := w
+               decision := none }
+    bob := { party := Protocol.Party.Bob
+             created_c := true, created_d := w, created_t := w
+             got_c := w, got_d := w, got_t := w
+             decision := none }
+    alice_received_c := w
+    alice_received_d := w
+    alice_received_t := w
+    bob_received_c := w
+    bob_received_d := w
+    bob_received_t := w }
+
+/-- Semantic bridge: attacks_global agrees with both_working. -/
+theorem attacks_global_iff_both_working (ch : BidirectionalChannel) :
+    attacks_global (execState_of ch) = both_working ch := by
+  unfold attacks_global execState_of Channel.to_emergence_model
+  cases hw : both_working ch <;> native_decide
+
+/-- decision_from_execState agrees with both_working on Attack/Abort. -/
+theorem decision_from_execState_eq (ch : BidirectionalChannel) :
+    decision_from_execState (execState_of ch) =
+      if both_working ch then Protocol.Decision.Attack else Protocol.Decision.Abort := by
+  simp only [decision_from_execState, attacks_global_iff_both_working]
 
 /-! ## Critical Messages -/
 
