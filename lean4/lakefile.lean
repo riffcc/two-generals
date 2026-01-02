@@ -61,3 +61,85 @@ lean_lib «AxiomMinimality» {
 lean_lib «ProtocolVariants» {
   -- Layer 13: Timeout alternatives and Byzantine message handling
 }
+
+-- v2: Minimal 6-packet protocol
+lean_lib «MinimalTGP» {
+  srcDir := "v2"
+}
+
+lean_lib «MinimalGraysModel» {
+  srcDir := "v2"
+}
+
+lean_lib «StaticAnalysis» {
+  srcDir := "v2"
+}
+
+lean_lib «FloodingAnalysis» {
+  srcDir := "v2"
+}
+
+lean_lib «ChannelModels» {
+  srcDir := "v2"
+}
+
+lean_lib «HonestAnalysis» {
+  srcDir := "v2"
+}
+
+lean_lib «ChannelProof» {
+  srcDir := "v2"
+}
+
+lean_lib «EpistemicProof» {
+  srcDir := "v2"
+}
+
+lean_lib «LocalDecisionRule» {
+  srcDir := "v2"
+}
+
+lean_lib «FinalSynthesis» {
+  srcDir := "v2"
+}
+
+-- v2 Modular Proof Structure (new)
+lean_lib «Protocol» {
+  srcDir := "v2"
+}
+
+lean_lib «Dependencies» {
+  srcDir := "v2"
+}
+
+lean_lib «ProofStapling» {
+  srcDir := "v2"
+}
+
+lean_lib «Channel» {
+  srcDir := "v2"
+}
+
+lean_lib «Bilateral» {
+  srcDir := "v2"
+}
+
+lean_lib «Exhaustive» {
+  srcDir := "v2"
+}
+
+lean_lib «Theseus» {
+  srcDir := "v2"
+}
+
+lean_lib «Gray» {
+  srcDir := "v2"
+}
+
+lean_lib «Solution» {
+  srcDir := "v2"
+}
+
+lean_lib «Emergence» {
+  srcDir := "v2"
+}
