@@ -547,7 +547,11 @@ theorem partitioned_a_to_b_blocks_bob (deps : CreationDependencies)
 
 /-- With asymmetric channel (one direction partitioned), no attack key emerges.
     Both parties abort because bilateral construction requires BOTH channels working.
-    PROOF: Partitioned direction blocks D or T, preventing bilateral completion. -/
+    PROOF: Partitioned direction blocks D or T, preventing bilateral completion.
+
+    NOTE: This is the primitive execution-level fact (¬ full oscillation).
+    See LocalDetect.partitioned_channel_causes_abort for the outcome-level theorem
+    that chains through Emergence.unilateral_failure_symmetric. -/
 theorem asymmetric_channel_causes_abort (deps : CreationDependencies)
     (ch : BidirectionalChannel)
     (h_part : ch.alice_to_bob = ChannelState.Partitioned ∨ ch.bob_to_alice = ChannelState.Partitioned) :

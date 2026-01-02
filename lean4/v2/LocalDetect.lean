@@ -631,8 +631,8 @@ theorem partitioned_channel_causes_abort (ch : BidirectionalChannel) (deps : Cre
   have h_break := partitioned_channel_breaks_oscillation ch deps h_part
   -- Extract the tuple components and apply the Emergence lemma
   simp only [derive_execution_with_channel, channel_delivers, to_emergence_model] at h_break ⊢
-  -- Use Emergence.unilateral_failure_symmetric to conclude
-  exact unilateral_failure_symmetric _ _ _ _ h_break
+  -- Use Emergence.unilateral_failure_symmetric to conclude (fully qualified)
+  exact Emergence.unilateral_failure_symmetric _ _ _ _ h_break
 
 /-- T_B delivery implies bilateral prerequisites (for well-formed executions).
     If Alice received T_B, then Bob created T_B, which requires:
