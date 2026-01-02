@@ -173,39 +173,29 @@ def initialAlice : Protocol.PartyState := Channel.initial_execution.alice
 /-- Initial party state for Bob: derived from Channel.initial_execution. -/
 def initialBob : Protocol.PartyState := Channel.initial_execution.bob
 
-/-- Final party state when both directions work: Attack. -/
-def finalAliceAttack : Protocol.PartyState :=
-  { party := Protocol.Party.Alice
-    created_c := true, created_d := true, created_t := true
-    got_c := true, got_d := true, got_t := true
-    decision := some Protocol.Decision.Attack }
-
-def finalBobAttack : Protocol.PartyState :=
-  { party := Protocol.Party.Bob
-    created_c := true, created_d := true, created_t := true
-    got_c := true, got_d := true, got_t := true
-    decision := some Protocol.Decision.Attack }
-
-/-- Final party state when channel fails: Abort. -/
-def finalAliceAbort : Protocol.PartyState :=
-  { party := Protocol.Party.Alice
-    created_c := true, created_d := false, created_t := false
-    got_c := false, got_d := false, got_t := false
-    decision := some Protocol.Decision.Abort }
-
-def finalBobAbort : Protocol.PartyState :=
-  { party := Protocol.Party.Bob
-    created_c := true, created_d := false, created_t := false
-    got_c := false, got_d := false, got_t := false
-    decision := some Protocol.Decision.Abort }
-
-/-- Get final Alice state based on channel. -/
+/-- Final party state for Alice, derived from `execState_of` and `decision_from_execState`. -/
 def finalAlice (ch : BidirectionalChannel) : Protocol.PartyState :=
-  if both_working ch then finalAliceAttack else finalAliceAbort
+  let es := execState_of ch
+  { party := es.alice.party
+    created_c := es.alice.created_c
+    created_d := es.alice.created_d
+    created_t := es.alice.created_t
+    got_c := es.alice.got_c
+    got_d := es.alice.got_d
+    got_t := es.alice.got_t
+    decision := some (decision_from_execState es) }
 
-/-- Get final Bob state based on channel. -/
+/-- Final party state for Bob, derived from `execState_of` and `decision_from_execState`. -/
 def finalBob (ch : BidirectionalChannel) : Protocol.PartyState :=
-  if both_working ch then finalBobAttack else finalBobAbort
+  let es := execState_of ch
+  { party := es.bob.party
+    created_c := es.bob.created_c
+    created_d := es.bob.created_d
+    created_t := es.bob.created_t
+    got_c := es.bob.got_c
+    got_d := es.bob.got_d
+    got_t := es.bob.got_t
+    decision := some (decision_from_execState es) }
 
 /-! ## Execution Construction -/
 
@@ -231,27 +221,17 @@ theorem initial_no_decision_alice : P_TGP.decided initialAlice = none := by
 theorem initial_no_decision_bob : P_TGP.decided initialBob = none := by
   simp [P_TGP, initialBob, Channel.initial_execution]
 
-/-- Attack final state has Attack decision. -/
-theorem attack_decision_alice : P_TGP.decided finalAliceAttack = some GrayCore.Decision.Attack := rfl
-theorem attack_decision_bob : P_TGP.decided finalBobAttack = some GrayCore.Decision.Attack := rfl
+/-- P_TGP.decided on finalAlice returns the semantics-derived decision. -/
+theorem decided_finalAlice (ch : BidirectionalChannel) :
+    P_TGP.decided (finalAlice ch)
+      = some (protoDecisionToGray (decision_from_execState (execState_of ch))) := by
+  simp [finalAlice, P_TGP]
 
-/-- Abort final state has Abort decision. -/
-theorem abort_decision_alice : P_TGP.decided finalAliceAbort = some GrayCore.Decision.Abort := rfl
-theorem abort_decision_bob : P_TGP.decided finalBobAbort = some GrayCore.Decision.Abort := rfl
-
-/-- Both working → final states are Attack. -/
-theorem working_final_alice (ch : BidirectionalChannel) (h : both_working ch = true) :
-    finalAlice ch = finalAliceAttack := by simp [finalAlice, h]
-
-theorem working_final_bob (ch : BidirectionalChannel) (h : both_working ch = true) :
-    finalBob ch = finalBobAttack := by simp [finalBob, h]
-
-/-- Not working → final states are Abort. -/
-theorem not_working_final_alice (ch : BidirectionalChannel) (h : both_working ch = false) :
-    finalAlice ch = finalAliceAbort := by simp [finalAlice, h]
-
-theorem not_working_final_bob (ch : BidirectionalChannel) (h : both_working ch = false) :
-    finalBob ch = finalBobAbort := by simp [finalBob, h]
+/-- P_TGP.decided on finalBob returns the semantics-derived decision. -/
+theorem decided_finalBob (ch : BidirectionalChannel) :
+    P_TGP.decided (finalBob ch)
+      = some (protoDecisionToGray (decision_from_execState (execState_of ch))) := by
+  simp [finalBob, P_TGP]
 
 /-- Both partitioned → not both working. -/
 theorem partitioned_not_working (ch : BidirectionalChannel) (h : both_partitioned ch = true) :
@@ -299,81 +279,79 @@ theorem working_full_delivery (ch : BidirectionalChannel) (h : both_working ch =
   intro m _
   cases hd : m.1 <;> simp [dirWorking, h_a, h_b]
 
-/-! ## Nat.find Lemma -/
-
-open Classical in
-/-- If p(0) is false and p(1) is true, then Nat.find returns 1. -/
-lemma natFind_eq_one {p : Nat → Prop} (h : ∃ t, p t) (hp0 : ¬ p 0) (hp1 : p 1) :
-    Nat.find h = 1 := by
-  -- First show Nat.find h ≤ 1 using minimality
-  have hle : Nat.find h ≤ 1 := by
-    by_contra hgt
-    have hlt : 1 < Nat.find h := Nat.lt_of_not_ge hgt
-    exact Nat.find_min h hlt hp1
-  -- Exclude 0, leaving 1
-  cases hfind : Nat.find h with
-  | zero =>
-      exfalso
-      have : p 0 := by simpa [hfind] using Nat.find_spec h
-      exact hp0 this
-  | succ n =>
-      have hn : n = 0 := by
-        have hsle : n.succ ≤ 1 := by simpa [hfind] using hle
-        exact Nat.eq_of_le_of_lt_succ (Nat.zero_le n) hsle
-      simp [hn]
-
 /-! ## Decision Lemmas (Proved, not axiomatized) -/
+
+/-- At t=1, Alice has a decision (finalAlice always has decision = some ...). -/
+theorem alice_has_decision_at_1 (ch : BidirectionalChannel) :
+    (P_TGP.decided ((exec_of ch).alice_states 1)).isSome = true := by
+  simp [exec_of, decided_finalAlice]
+
+/-- At t=1, Bob has a decision (finalBob always has decision = some ...). -/
+theorem bob_has_decision_at_1 (ch : BidirectionalChannel) :
+    (P_TGP.decided ((exec_of ch).bob_states 1)).isSome = true := by
+  simp [exec_of, decided_finalBob]
 
 /-- Alice's decision equals the decision at t=1 (the first decision time). -/
 theorem alice_decision_eq_t1 (ch : BidirectionalChannel) :
     GrayCore.alice_decision (exec_of ch) = P_TGP.decided (finalAlice ch) := by
   classical
   unfold GrayCore.alice_decision
-  -- The predicate is decidable at t=1
-  have hex : ∃ t, (P_TGP.decided ((exec_of ch).alice_states t)).isSome = true := by
-    refine ⟨1, ?_⟩
-    simp only [exec_of, one_ne_zero, ↓reduceIte]
-    unfold finalAlice P_TGP protoDecisionToGray
-    split <;> rfl
-  simp only [hex, ↓reduceDIte]
-  -- At t=0, no decision (initialAlice has decision = none)
-  have hp0 : ¬ (P_TGP.decided ((exec_of ch).alice_states 0)).isSome = true := by
-    simp only [exec_of, ↓reduceIte, P_TGP, initialAlice]
-    exact Bool.false_ne_true
-  -- At t=1, there's a decision
-  have hp1 : (P_TGP.decided ((exec_of ch).alice_states 1)).isSome = true := by
-    simp only [exec_of, one_ne_zero, ↓reduceIte]
-    unfold finalAlice P_TGP protoDecisionToGray
-    split <;> rfl
-  -- Nat.find hex = 1 via our lemma (convert bridges decidability instances)
-  have hfind : Nat.find hex = 1 := by
-    convert natFind_eq_one (p := fun t => (P_TGP.decided ((exec_of ch).alice_states t)).isSome = true)
-      hex hp0 hp1
-  simp only [hfind, exec_of, one_ne_zero, ↓reduceIte]
+
+  let p : Nat → Prop :=
+    fun t => (P_TGP.decided ((exec_of ch).alice_states t)).isSome = true
+
+  have hp1 : p 1 := by simp [p, exec_of, decided_finalAlice]
+
+  by_cases hEx : ∃ t, p t
+  · simp only [hEx, p, ↓reduceDIte]
+
+    have hp0 : ¬ p 0 := by
+      have h : P_TGP.decided ((exec_of ch).alice_states 0) = none := by
+        simpa [exec_of] using initial_no_decision_alice
+      simp [p, h]
+
+    have hfind : Nat.find hEx = 1 := by
+      have hle : Nat.find hEx ≤ 1 := Nat.find_le hp1
+      have hne0 : Nat.find hEx ≠ 0 := by
+        intro h0
+        have : p 0 := by simpa [p, h0] using (Nat.find_spec hEx)
+        exact hp0 this
+      have hge : 1 ≤ Nat.find hEx := (Nat.succ_le_iff).2 (Nat.pos_of_ne_zero hne0)
+      exact le_antisymm hle hge
+
+    simp [exec_of, hfind]
+  · exact (hEx ⟨1, hp1⟩).elim
 
 /-- Bob's decision equals the decision at t=1 (the first decision time). -/
 theorem bob_decision_eq_t1 (ch : BidirectionalChannel) :
     GrayCore.bob_decision (exec_of ch) = P_TGP.decided (finalBob ch) := by
   classical
   unfold GrayCore.bob_decision
-  have hex : ∃ t, (P_TGP.decided ((exec_of ch).bob_states t)).isSome = true := by
-    refine ⟨1, ?_⟩
-    simp only [exec_of, one_ne_zero, ↓reduceIte]
-    unfold finalBob P_TGP protoDecisionToGray
-    split <;> rfl
-  simp only [hex, ↓reduceDIte]
-  have hp0 : ¬ (P_TGP.decided ((exec_of ch).bob_states 0)).isSome = true := by
-    simp only [exec_of, ↓reduceIte, P_TGP, initialBob]
-    exact Bool.false_ne_true
-  have hp1 : (P_TGP.decided ((exec_of ch).bob_states 1)).isSome = true := by
-    simp only [exec_of, one_ne_zero, ↓reduceIte]
-    unfold finalBob P_TGP protoDecisionToGray
-    split <;> rfl
-  -- Nat.find hex = 1 via our lemma (convert bridges decidability instances)
-  have hfind : Nat.find hex = 1 := by
-    convert natFind_eq_one (p := fun t => (P_TGP.decided ((exec_of ch).bob_states t)).isSome = true)
-      hex hp0 hp1
-  simp only [hfind, exec_of, one_ne_zero, ↓reduceIte]
+
+  let p : Nat → Prop :=
+    fun t => (P_TGP.decided ((exec_of ch).bob_states t)).isSome = true
+
+  have hp1 : p 1 := by simp [p, exec_of, decided_finalBob]
+
+  by_cases hEx : ∃ t, p t
+  · simp only [hEx, p, ↓reduceDIte]
+
+    have hp0 : ¬ p 0 := by
+      have h : P_TGP.decided ((exec_of ch).bob_states 0) = none := by
+        simpa [exec_of] using initial_no_decision_bob
+      simp [p, h]
+
+    have hfind : Nat.find hEx = 1 := by
+      have hle : Nat.find hEx ≤ 1 := Nat.find_le hp1
+      have hne0 : Nat.find hEx ≠ 0 := by
+        intro h0
+        have : p 0 := by simpa [p, h0] using (Nat.find_spec hEx)
+        exact hp0 this
+      have hge : 1 ≤ Nat.find hEx := (Nat.succ_le_iff).2 (Nat.pos_of_ne_zero hne0)
+      exact le_antisymm hle hge
+
+    simp [exec_of, hfind]
+  · exact (hEx ⟨1, hp1⟩).elim
 
 /-! ## Main Theorems -/
 
@@ -383,16 +361,8 @@ theorem agreement_on_generated :
   intro exec ⟨ch, h_gen⟩
   subst h_gen
   rw [alice_decision_eq_t1, bob_decision_eq_t1]
-  -- Both final states have the same decision type (both Attack or both Abort)
-  by_cases h_work : both_working ch = true
-  · -- Both working: both Attack
-    rw [working_final_alice ch h_work, working_final_bob ch h_work]
-    simp [attack_decision_alice, attack_decision_bob]
-  · -- Not working: both Abort
-    have h_not_work : both_working ch = false := by
-      cases h : both_working ch <;> simp_all
-    rw [not_working_final_alice ch h_not_work, not_working_final_bob ch h_not_work]
-    simp [abort_decision_alice, abort_decision_bob]
+  -- Both sides are literally the same expression now.
+  simp [decided_finalAlice, decided_finalBob]
 
 /-- Total termination: both always decide. -/
 theorem total_termination_on_generated :
@@ -400,35 +370,29 @@ theorem total_termination_on_generated :
   intro exec ⟨ch, h_gen⟩
   subst h_gen
   rw [alice_decision_eq_t1, bob_decision_eq_t1]
-  by_cases h_work : both_working ch = true
-  · rw [working_final_alice ch h_work, working_final_bob ch h_work]
-    simp [attack_decision_alice, attack_decision_bob]
-  · have h_not_work : both_working ch = false := by
-      cases h : both_working ch <;> simp_all
-    rw [not_working_final_alice ch h_not_work, not_working_final_bob ch h_not_work]
-    simp [abort_decision_alice, abort_decision_bob]
+  -- Both are `some ...` by construction
+  simp [decided_finalAlice, decided_finalBob]
 
 /-- Abort on no-channel: NoChannel → both Abort. -/
 theorem abort_on_no_channel_generated :
     GrayCore.AbortOnNoChannelOn P_TGP GMsg IsGenerated := by
   intro exec ⟨ch, h_gen⟩ h_no
   subst h_gen
-  -- NoChannel means delivered = 0 at all times
-  -- For our model, this requires both_working = false
+  -- NoChannel means delivered = 0 at all times → both_working = false
   have h_not_work : both_working ch = false := by
     by_contra h_work
     have h_working : both_working ch = true := by
       cases h : both_working ch <;> simp_all
-    -- If both_working, delivered 1 is nonempty
     have hdeliv : (exec_of ch).delivered 1 ≠ 0 := by
       simp only [exec_of, ↓reduceIte]
       rw [working_full_delivery ch h_working]
       simp [criticalMS, criticalMsgs]
     exact hdeliv (h_no 1)
-  -- So both decide Abort
+  -- Use the bridge lemma to get the decision
+  have hdec : decision_from_execState (execState_of ch) = Protocol.Decision.Abort := by
+    simp [decision_from_execState, attacks_global_iff_both_working, h_not_work]
   rw [alice_decision_eq_t1, bob_decision_eq_t1]
-  rw [not_working_final_alice ch h_not_work, not_working_final_bob ch h_not_work]
-  exact ⟨abort_decision_alice, abort_decision_bob⟩
+  simp [decided_finalAlice, decided_finalBob, hdec, protoDecisionToGray]
 
 /-- Every critical message is flooded (sent every tick). -/
 theorem critical_flooded (ch : BidirectionalChannel) (m : GMsg) (hm : m ∈ criticalMsgs) :
@@ -506,9 +470,11 @@ theorem attack_on_live_generated :
   intro exec ⟨ch, h_gen⟩ h_live
   subst h_gen
   have h_work := live_implies_working ch h_live
+  -- Use the bridge lemma to get the decision
+  have hdec : decision_from_execState (execState_of ch) = Protocol.Decision.Attack := by
+    simp [decision_from_execState, attacks_global_iff_both_working, h_work]
   rw [alice_decision_eq_t1, bob_decision_eq_t1]
-  rw [working_final_alice ch h_work, working_final_bob ch h_work]
-  exact ⟨attack_decision_alice, attack_decision_bob⟩
+  simp [decided_finalAlice, decided_finalBob, hdec, protoDecisionToGray]
 
 /-- Finite-time termination: decides by T=2. -/
 theorem finite_time_termination_generated :
@@ -516,20 +482,16 @@ theorem finite_time_termination_generated :
   use 2
   intro exec ⟨ch, h_gen⟩
   subst h_gen
-  -- At t=1 < 2, both have decided
+  -- At t=1 < 2, both have decided (by construction)
   constructor
   · use 1
     constructor
     · decide  -- 1 < 2
-    · simp only [exec_of, one_ne_zero, ↓reduceIte]
-      unfold finalAlice P_TGP protoDecisionToGray
-      split <;> rfl
+    · simp [exec_of, finalAlice, P_TGP]
   · use 1
     constructor
     · decide  -- 1 < 2
-    · simp only [exec_of, one_ne_zero, ↓reduceIte]
-      unfold finalBob P_TGP protoDecisionToGray
-      split <;> rfl
+    · simp [exec_of, finalBob, P_TGP]
 
 /-! ## The Complete Correctness Theorem -/
 
