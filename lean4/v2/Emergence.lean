@@ -313,6 +313,29 @@ theorem attack_requires_full_oscillation (d_a d_b a_responds b_responds : Bool) 
       exact ⟨h_ds.1, h_ds.2, h_a, h_b⟩
   · simp at h
 
+/-- BIDIRECTIONAL: attack_key.isSome ↔ full oscillation.
+    This is the key equivalence for bridge proofs between Channel and Emergence.
+    Allows rewriting "no full oscillation" directly to "no attack key". -/
+theorem attack_key_some_iff_full_oscillation (d_a d_b a_responds b_responds : Bool) :
+    (make_state d_a d_b a_responds b_responds).attack_key.isSome = true ↔
+    d_a = true ∧ d_b = true ∧ a_responds = true ∧ b_responds = true := by
+  -- 16-case truth table; fast + robust against refactors
+  cases d_a <;> cases d_b <;> cases a_responds <;> cases b_responds <;> native_decide
+
+/-- Corollary: no full oscillation → attack_key = none.
+    Useful for channel proofs where partition breaks oscillation. -/
+theorem no_full_oscillation_implies_no_attack_key (d_a d_b a_responds b_responds : Bool)
+    (h : ¬(d_a = true ∧ d_b = true ∧ a_responds = true ∧ b_responds = true)) :
+    (make_state d_a d_b a_responds b_responds).attack_key = none := by
+  -- Use the iff to show isSome = false, then derive attack_key = none
+  have h_not_some : (make_state d_a d_b a_responds b_responds).attack_key.isSome ≠ true := by
+    intro h_is_some
+    exact h ((attack_key_some_iff_full_oscillation d_a d_b a_responds b_responds).mp h_is_some)
+  -- isSome ≠ true means attack_key = none
+  cases hk : (make_state d_a d_b a_responds b_responds).attack_key with
+  | none => rfl
+  | some _ => simp [hk] at h_not_some
+
 /-! ## No Asymmetric Outcomes
 
     THEOREM: Asymmetric outcomes are impossible.
@@ -513,6 +536,8 @@ theorem channel_asymmetry_cannot_cause_outcome_asymmetry
 #check unilateral_failure_symmetric
 #check no_asymmetric_outcomes
 #check attack_requires_full_oscillation
+#check attack_key_some_iff_full_oscillation
+#check no_full_oscillation_implies_no_attack_key
 #check protocol_of_theseus_guarantee
 #check partition_A
 #check partition_B

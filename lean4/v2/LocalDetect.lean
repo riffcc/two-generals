@@ -582,6 +582,58 @@ theorem partitioned_channel_no_attack (ch : BidirectionalChannel) (deps : Creati
   | inl h_atob => simp [h_atob]
   | inr h_btoa => simp [h_btoa]
 
+/-- On partitioned channel, both views agree (both are false).
+    This is stronger than partitioned_channel_no_attack: the views are EQUAL.
+    PROOF: When one direction is partitioned, messages can't complete the loop,
+    so both alice_attacks_exec and bob_attacks_exec evaluate to false. -/
+theorem partitioned_channel_views_agree (ch : BidirectionalChannel) (deps : CreationDependencies)
+    (h_part : ch.alice_to_bob = ChannelState.Partitioned ∨ ch.bob_to_alice = ChannelState.Partitioned) :
+    let exec := derive_execution_with_channel ch deps
+    alice_attacks_exec (alice_exec_view exec) =
+    bob_attacks_exec (bob_exec_view exec) := by
+  simp [derive_execution_with_channel, channel_delivers,
+        alice_attacks_exec, bob_attacks_exec, alice_exec_view, bob_exec_view]
+  cases h_part with
+  | inl h_atob => simp [h_atob]
+  | inr h_btoa => simp [h_btoa]
+
+/-! ## Bridge to Emergence Outcomes
+
+    These theorems connect channel-level execution to Emergence-level outcomes.
+    The key insight: partitioned channel → not full oscillation → CoordinatedAbort.
+-/
+
+/-- Partitioned channel implies not full oscillation in the emergence model.
+    This is the key bridge lemma: partition breaks the bilateral loop.
+    Result stated as disjunction to compose with unilateral_failure_symmetric. -/
+theorem partitioned_channel_breaks_oscillation (ch : BidirectionalChannel) (deps : CreationDependencies)
+    (h_part : ch.alice_to_bob = ChannelState.Partitioned ∨ ch.bob_to_alice = ChannelState.Partitioned) :
+    let exec := derive_execution_with_channel ch deps
+    let (_, _, a_responds, b_responds) := to_emergence_model exec
+    a_responds = false ∨ b_responds = false := by
+  simp [derive_execution_with_channel, channel_delivers, to_emergence_model]
+  cases h_part with
+  | inl h_atob => simp [h_atob]
+  | inr h_btoa => simp [h_btoa]
+
+/-- END-TO-END: Partitioned channel implies CoordinatedAbort outcome.
+    Combines: partition → breaks oscillation → unilateral failure → abort.
+    This is the complete channel-to-outcome theorem.
+
+    PROOF: Uses compositional approach via Emergence.unilateral_failure_symmetric
+    instead of expanding definitions directly. -/
+theorem partitioned_channel_causes_abort (ch : BidirectionalChannel) (deps : CreationDependencies)
+    (h_part : ch.alice_to_bob = ChannelState.Partitioned ∨ ch.bob_to_alice = ChannelState.Partitioned) :
+    let exec := derive_execution_with_channel ch deps
+    let (d_a, d_b, a_responds, b_responds) := to_emergence_model exec
+    get_outcome (make_state d_a d_b a_responds b_responds).attack_key = Outcome.CoordinatedAbort := by
+  -- Get the disjunction: partition → a_responds = false ∨ b_responds = false
+  have h_break := partitioned_channel_breaks_oscillation ch deps h_part
+  -- Extract the tuple components and apply the Emergence lemma
+  simp only [derive_execution_with_channel, channel_delivers, to_emergence_model] at h_break ⊢
+  -- Use Emergence.unilateral_failure_symmetric to conclude
+  exact unilateral_failure_symmetric _ _ _ _ h_break
+
 /-- T_B delivery implies bilateral prerequisites (for well-formed executions).
     If Alice received T_B, then Bob created T_B, which requires:
     - Bob had D_A (from Alice)
@@ -701,9 +753,16 @@ theorem generated_exec_simulates_bool (exec : ExecutionState) (h_gen : Generated
 #check gray_unreliable_always_symmetric
 #check and3_eq_true
 #check Generated
+#check GeneratedWithChannel
 #check WellFormed
 #check derive_execution_wellformed
+#check derive_execution_with_channel_wellformed
 #check fair_lossy_wellformed
+#check symmetric_channel_views_agree
+#check partitioned_channel_no_attack
+#check partitioned_channel_views_agree
+#check partitioned_channel_breaks_oscillation
+#check partitioned_channel_causes_abort
 #check exec_T_B_implies_bilateral
 #check exec_T_A_implies_bilateral
 #check exec_local_views_agree
