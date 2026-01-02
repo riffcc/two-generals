@@ -454,24 +454,84 @@ def alice_attacks_exec (view : AliceExecView) : Bool :=
 def bob_attacks_exec (view : BobExecView) : Bool :=
   view.received_D_A ∧ view.received_T_A ∧ view.sent_T_B
 
-/-- CRITICAL: T_B delivery in execution implies bilateral prerequisites.
+/-! ## Well-Formed Executions
+
+    A well-formed execution satisfies the causal dependencies enforced by
+    derive_execution in Channel.lean:
+
+    - alice_received_t → bob.created_t (T_B is delivered → Bob created it)
+    - bob.created_t → bob_received_d (Bob creates T → Bob had D_A)
+    - Symmetric properties for Alice's T_A
+
+    These are NOT arbitrary state predicates - they're enforced by the
+    message dependency structure of the protocol.
+-/
+
+/-- Predicate: execution state satisfies causal dependencies from protocol. -/
+def WellFormed (exec : ExecutionState) : Prop :=
+  -- T_B delivery implies Bob created it
+  (exec.alice_received_t = true → exec.bob.created_t = true) ∧
+  -- Bob creating T implies he had D_A
+  (exec.bob.created_t = true → exec.bob_received_d = true ∧ exec.bob.created_d = true) ∧
+  -- T_A delivery implies Alice created it
+  (exec.bob_received_t = true → exec.alice.created_t = true) ∧
+  -- Alice creating T implies she had D_B
+  (exec.alice.created_t = true → exec.alice_received_d = true ∧ exec.alice.created_d = true) ∧
+  -- D delivery implies creation
+  (exec.alice_received_d = true → exec.bob.created_d = true) ∧
+  (exec.bob_received_d = true → exec.alice.created_d = true)
+
+/-- derive_execution produces well-formed executions.
+    PROOF: By construction of derive_execution in Channel.lean. -/
+theorem derive_execution_wellformed (adv : FairLossyAdversary) (deps : CreationDependencies) :
+    WellFormed (derive_execution adv deps) := by
+  simp only [WellFormed, derive_execution]
+  constructor
+  · -- alice_received_t → bob.created_t
+    intro h; simp_all
+  constructor
+  · -- bob.created_t → bob_received_d ∧ bob.created_d
+    intro h; simp_all
+  constructor
+  · -- bob_received_t → alice.created_t
+    intro h; simp_all
+  constructor
+  · -- alice.created_t → alice_received_d ∧ alice.created_d
+    intro h; simp_all
+  constructor
+  · -- alice_received_d → bob.created_d
+    intro h; simp_all
+  · -- bob_received_d → alice.created_d
+    intro h; simp_all
+
+/-- full_execution_under_fair_lossy produces well-formed executions. -/
+theorem fair_lossy_wellformed (adv : FairLossyAdversary) :
+    WellFormed (full_execution_under_fair_lossy adv) := by
+  simp only [full_execution_under_fair_lossy]
+  exact derive_execution_wellformed adv full_participation
+
+/-- T_B delivery implies bilateral prerequisites (for well-formed executions).
     If Alice received T_B, then Bob created T_B, which requires:
     - Bob had D_A (from Alice)
     - Bob had D_B (he created it)
-    - V existed (d_a ∧ d_b)
 
-    This is an EXECUTION SEMANTICS FACT, not a smuggled global.
-    The execution model enforces creation dependencies. -/
-axiom exec_T_B_implies_bilateral :
-  ∀ (exec : ExecutionState),
+    This is now a LEMMA, not an axiom, using WellFormed as precondition. -/
+theorem exec_T_B_implies_bilateral (exec : ExecutionState) (h_wf : WellFormed exec) :
     exec.alice_received_t = true →
-    exec.bob.created_t = true ∧ exec.bob_received_d = true
+    exec.bob.created_t = true ∧ exec.bob_received_d = true := by
+  intro h_recv
+  have h1 : exec.bob.created_t = true := h_wf.1 h_recv
+  have h2 : exec.bob_received_d = true ∧ exec.bob.created_d = true := h_wf.2.1 h1
+  exact ⟨h1, h2.1⟩
 
-/-- T_A delivery implies its prerequisites. -/
-axiom exec_T_A_implies_bilateral :
-  ∀ (exec : ExecutionState),
+/-- T_A delivery implies its prerequisites (for well-formed executions). -/
+theorem exec_T_A_implies_bilateral (exec : ExecutionState) (h_wf : WellFormed exec) :
     exec.bob_received_t = true →
-    exec.alice.created_t = true ∧ exec.alice_received_d = true
+    exec.alice.created_t = true ∧ exec.alice_received_d = true := by
+  intro h_recv
+  have h1 : exec.alice.created_t = true := h_wf.2.2.1 h_recv
+  have h2 : exec.alice_received_d = true ∧ exec.alice.created_d = true := h_wf.2.2.2.1 h1
+  exact ⟨h1, h2.1⟩
 
 /-- MAIN THEOREM: Execution-level local views agree.
     If Alice attacks (from her exec view), Bob attacks (from his exec view).
@@ -513,16 +573,33 @@ theorem fair_lossy_exec_views_agree (adv : FairLossyAdversary) :
   simp only [full_execution_under_fair_lossy]
   rfl
 
-/-- The execution-level view matches the boolean-level view.
-    This is the SIMULATION THEOREM connecting the two layers.
+/-- The simulation theorem for fair-lossy executions specifically.
+    This connects the execution-level attack to the boolean-level attack.
 
-    The constraint: well-formed executions have alice_received_t → response_B valid.
-    This is enforced by the execution semantics (can't receive T without V existing). -/
-axiom exec_view_simulates_bool_view :
+    For executions from full_execution_under_fair_lossy, if Alice attacks
+    in her exec view, she also attacks in her local view (emergence model).
+
+    This is provable by direct computation because full_execution_under_fair_lossy
+    produces concrete boolean values. -/
+theorem fair_lossy_exec_simulates_bool (adv : FairLossyAdversary) :
+    let exec := full_execution_under_fair_lossy adv
+    let (d_a, d_b, a_responds, b_responds) := to_emergence_model exec
+    (alice_attacks_exec (alice_exec_view exec) = true) →
+    (alice_attacks_local (alice_true_view d_a d_b a_responds b_responds) = true) := by
+  simp only [full_execution_under_fair_lossy, derive_execution, full_participation,
+             to_emergence_model, alice_attacks_exec, alice_exec_view,
+             alice_attacks_local, alice_true_view, V_emerges, response_B]
+  native_decide
+
+/-- General simulation theorem: for well-formed executions where Alice attacks,
+    the boolean model also shows attack.
+
+    NOTE: This requires the execution to satisfy specific structural properties
+    that are automatically satisfied by derive_execution. For general ExecutionState,
+    this is stated as an axiom that holds for all protocol-derived executions. -/
+axiom exec_view_simulates_bool_view_general :
     ∀ (exec : ExecutionState),
-    -- Well-formed execution: received_t implies valid response
-    (exec.alice_received_t = true →
-      (response_B (V_emerges exec.bob_received_d exec.alice_received_d) exec.bob_received_d).isSome) →
+    WellFormed exec →
     let (d_a, d_b, a_responds, b_responds) := to_emergence_model exec
     (alice_attacks_exec (alice_exec_view exec) = true) →
     (alice_attacks_local (alice_true_view d_a d_b a_responds b_responds) = true)
@@ -534,7 +611,13 @@ axiom exec_view_simulates_bool_view :
 #check local_matches_global
 #check attack_key_bilateral_evidence
 #check gray_unreliable_always_symmetric
+#check WellFormed
+#check derive_execution_wellformed
+#check fair_lossy_wellformed
+#check exec_T_B_implies_bilateral
+#check exec_T_A_implies_bilateral
 #check exec_local_views_agree
 #check fair_lossy_exec_views_agree
+#check fair_lossy_exec_simulates_bool
 
 end LocalDetect
