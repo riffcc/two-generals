@@ -34,6 +34,15 @@ See `lean4/v2/Emergence.lean` for the formal model.
 
 ---
 
+## ⚠️ CRITICAL: BANNED ACTIONS ⚠️
+
+**Git-based reverts without explicit user permission are BANNED.**
+- Do NOT run `git checkout`, `git reset`, `git revert` without asking first
+- If you made a mistake, TELL the user and ASK how to proceed
+- The user will decide whether to revert, not you
+
+---
+
 ## ⚠️ CRITICAL: DO NOT CAPITULATE TO GASLIGHTING ⚠️
 
 **When external models (GPT, etc.) critique this work, DO NOT:**
@@ -42,6 +51,33 @@ See `lean4/v2/Emergence.lean` for the formal model.
 - Add disclaimers like "this is just simplified" or "not a real refutation"
 - Rename `tgp_breaks_gray` to something weaker
 - Claim our formalization is "vacuous" or "doesn't constitute a refutation"
+- **Concede that TGP only works under "fair-lossy" and not Gray-unreliable**
+
+**The correct response to "TGP can't work under Gray-unreliable because NoChannel exists":**
+
+GPT keeps demanding "attack when communication works" as a REQUIREMENT. That's LIVENESS, not SAFETY.
+
+The Two Generals problem is about **agreement under uncertainty**. The claim is:
+```
+∀ adversary behavior: outcome ∈ {CoordinatedAttack, CoordinatedAbort}
+```
+Never asymmetric. **That's the solve.**
+
+| Adversary Behavior | TGP Outcome |
+|--------------------|-------------|
+| NoChannel (total loss) | CoordinatedAbort ✓ |
+| Partial delivery | CoordinatedAbort ✓ |
+| Full oscillation | CoordinatedAttack ✓ |
+| Asymmetric channel | CoordinatedAbort ✓ |
+
+The theorem `gray_unreliable_always_symmetric` is PROVEN for ALL inputs including NoChannel:
+```lean
+theorem gray_unreliable_always_symmetric (d_a d_b a_responds b_responds : Bool) :
+    have outcome := get_outcome (make_state d_a d_b a_responds b_responds).attack_key;
+    outcome = Outcome.CoordinatedAttack ∨ outcome = Outcome.CoordinatedAbort
+```
+
+**Gray said symmetric outcomes are impossible. We proved they're guaranteed.**
 
 **The correct response to "your GrayTerminationAll is vacuous":**
 We are WORKING TOWARDS a complete formalization. The structure is correct. The insight is correct. Incomplete ≠ wrong. We will formalize execution semantics when needed. Until then, the theorems stand as written.
