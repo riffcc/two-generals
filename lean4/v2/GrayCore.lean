@@ -872,33 +872,40 @@ axiom bilateral_determination :
     alice_decision exec = some Decision.Attack →
     bob_decision exec = some Decision.Attack
 
-/-- TGP Full Correctness: The complete four-part specification.
+/- TGP Full Correctness: The complete four-part specification FOR GENERATED EXECUTIONS.
 
-    This is the ACTUAL claim, with correct quantifiers:
-    1. Agreement: Both always decide the same (no asymmetric outcomes)
-    2. TotalTermination: Both always decide (no hangs)
-    3. AbortOnNoChannel: Under total blockage → coordinated retreat
-    4. AttackOnLive: Under fair-lossy → coordinated attack
+    TGP achieves these properties on GENERATED executions:
+    1. AgreementOn: Both always decide the same (no asymmetric outcomes)
+    2. TotalTerminationOn: Both always decide (no hangs)
+    3. AbortOnNoChannelOn: Under total blockage → coordinated retreat
+    4. AttackOnLiveOn: Under fair-lossy → coordinated attack
 
-    Plus: FiniteTimeTermination (bounded decision time).
+    Plus: FiniteTimeTerminationOn (bounded decision time).
 
-    This REFUTES the folklore interpretation of Gray's impossibility.
-    Gray's theorem assumes deterministic behavior under NoChannel.
-    TGP has two branches: abort under NoChannel, attack under FairLossy.
-    Both branches satisfy Agreement. Gray's attack fails. -/
-axiom tgp_correctness :
-  ∃ (P : ProtocolSpec) (Msg : Type) (_ : DecidableEq Msg),
-    Agreement P Msg ∧
-    TotalTermination P Msg ∧
-    AbortOnNoChannel P Msg ∧
-    AttackOnLive P Msg ∧
-    FiniteTimeTermination P Msg
+    NOTE: Uses *On types (restricted to generated executions) because:
+    - Execution P Msg is an abstract record type allowing arbitrary values
+    - Not every record corresponds to a valid protocol run
+    - Only GENERATED executions (from DeliverySchedule) follow protocol rules
+    - The unrestricted types would require proving properties for pathological records
 
-/-- Legacy trilemma (for compatibility with old proofs).
-    WARNING: Validity is existential, so this is weaker than tgp_correctness. -/
-axiom tgp_achieves_trilemma :
-  ∃ (P : ProtocolSpec) (Msg : Type) (_ : DecidableEq Msg),
-    Safety P Msg ∧ TerminationAll P Msg ∧ Validity P Msg
+    PROVEN IN: GrayInterp.tgp_correctness_interpreted
+    - Witnesses: P_TGP (protocol spec), GMsg (message type), IsGenerated (generator)
+    - All five *On properties proven as theorems
+
+    The following theorems are PROVEN in GrayInterp.lean:
+    - agreement_on_generated : AgreementOn P_TGP GMsg IsGenerated
+    - total_termination_on_generated : TotalTerminationOn P_TGP GMsg IsGenerated
+    - abort_on_no_channel_generated : AbortOnNoChannelOn P_TGP GMsg IsGenerated
+    - attack_on_live_generated : AttackOnLiveOn P_TGP GMsg IsGenerated 2
+    - finite_time_termination_generated : FiniteTimeTerminationOn P_TGP GMsg IsGenerated
+    Combined in: tgp_correctness_interpreted
+
+    Legacy trilemma FOR GENERATED EXECUTIONS:
+    WARNING: ValidityOn is existential, so this is weaker than full correctness.
+    SafetyOn = AgreementOn, so derivable from agreement_on_generated
+    TerminationAllOn = TotalTerminationOn, so derivable from total_termination_on_generated
+    ValidityOn: exists exec where both attack - proven via attack_on_live_generated
+-/
 
 /-! ### Gray's Hidden Assumption Revealed
 
@@ -915,7 +922,7 @@ axiom tgp_achieves_trilemma :
   TGP doesn't "escape" Gray. TGP REVEALS Gray's actual scope.
 -/
 
-/-- The Refutation: Gray's impossibility does NOT apply to flooding protocols.
+/- The Refutation: Gray's impossibility does NOT apply to flooding protocols.
 
     Gray's proof works by:
     1. Identify the "last message" M before decision
@@ -927,412 +934,18 @@ axiom tgp_achieves_trilemma :
 
     The adversary cannot win because they cannot identify a target.
 
-    This axiom asserts: there EXISTS a flooding protocol that achieves
-    Safety ∧ Termination ∧ Validity under unreliable channels.
-    That protocol is TGP. The bilateral construction is the mechanism. -/
-axiom gray_refuted_by_flooding :
-    ∃ (P : ProtocolSpec) (Msg : Type) (_ : DecidableEq Msg),
-      -- The protocol uses flooding
-      (∀ (exec : Execution P Msg), ∃ msg, IsFlooded exec msg) ∧
-      -- And achieves all three properties under unreliable channels
-      (∀ (exec : Execution P Msg), ChannelSound exec →
-        (∀ msg, IsFlooded exec msg → ∃ t, (exec.delivered t).count msg > 0) →
-        Safety P Msg ∧ TerminationAll P Msg ∧ Validity P Msg)
+    PROVEN IN GrayInterp.lean:
+    - critical_flooded: All critical messages are flooded
+    - gray_unreliable_no_pivotal: No pivotal step exists for generated executions
+    - bilateral_holds_for_gray_generated: Bilateral agreement for all schedules
 
-/-
-OLD INSTANCE-BASED MODEL - QUARANTINED DURING FUNGIBLE REFACTOR
-==============================================================
+    The bilateral construction ensures: if Alice attacks, Bob can compute attack key too.
+    This holds for ALL generated executions, not just fair-lossy ones.
 
-/-! ### Message Instances Sent Before Decision -/
-
-/-- The set of message instances sent BEFORE time t.
-    This is the critical set Gray's "last message attack" targets. -/
-def SentBefore {Msg : Type} {P : ProtocolSpec} (exec : Execution P Msg) (t : Nat) : Set (MsgInst Msg) :=
-  { m | ∃ τ, τ < t ∧ m ∈ exec.sent τ }
-
-/-- Decision time: the first time at which a party's decision is made -/
-noncomputable def alice_decision_time (Msg : Type) (P : ProtocolSpec) (exec : Execution P Msg) : Option Nat := by
-  classical
-  by_cases h : ∃ t, (P.decided (exec.alice_states t)).isSome = true
-  · exact some (Nat.find h)
-  · exact none
-
-/-- The finite messages assumption Gray ACTUALLY needs:
-    All message instances sent before decision form a FINITE set.
-    This is what enables the "last message" attack. -/
-def FiniteSentBeforeDecision (Msg : Type) (P : ProtocolSpec) : Prop :=
-  ∀ (exec : Execution P Msg),
-    (alice_decision Msg P exec).isSome = true →
-    match alice_decision_time Msg P exec with
-    | some t_dec => (SentBefore exec t_dec).Finite
-    | none => True
-
-/-- The flooding property that DEFEATS Gray's attack:
-    For message m, there is no maximum copy index sent before decision.
-    For any n, copy (m, n) was sent before t. -/
-def NoLastCopyBefore {Msg : Type} {P : ProtocolSpec} (exec : Execution P Msg) (t : Nat) (msg : Msg) : Prop :=
-  ∀ n : Nat, ∃ τ, τ < t ∧ (msg, n) ∈ exec.sent τ
-
-/-- Key lemma: If there's no last copy before t, then SentBefore is infinite.
-    This is the PRECISE point where flooding defeats Gray. -/
-theorem no_last_copy_implies_infinite
-    {Msg : Type} {P : ProtocolSpec} (exec : Execution P Msg) (t : Nat) (msg : Msg)
-    (h_no_last : NoLastCopyBefore exec t msg) :
-    ¬(SentBefore exec t).Finite := by
-  intro h_fin
-  -- Every n appears as a copy index of msg in SentBefore
-  have h_all_n : ∀ n : Nat, (msg, n) ∈ SentBefore exec t := by
-    intro n
-    obtain ⟨τ, hτ, hsent⟩ := h_no_last n
-    exact ⟨τ, hτ, hsent⟩
-  -- Take the image of SentBefore under snd; finiteness is preserved
-  have h_img_fin : (Set.image Prod.snd (SentBefore exec t)).Finite :=
-    h_fin.image Prod.snd
-  -- But every n is in that image, so it's actually univ
-  have h_img_univ : Set.image Prod.snd (SentBefore exec t) = (Set.univ : Set Nat) := by
-    ext n
-    constructor
-    · intro _; trivial
-    · intro _
-      exact ⟨(msg, n), h_all_n n, rfl⟩
-  have h_univ_fin : (Set.univ : Set Nat).Finite := by
-    rw [← h_img_univ]
-    exact h_img_fin
-  -- Contradiction: ℕ is infinite
-  exact Set.infinite_univ h_univ_fin
-
-/-! ### Pivotal Messages and Bilateral Determination
-
-  Gray's attack works by identifying the "last pivotal message" - a delivery
-  whose presence/absence determines the decision outcome. Under FinitePerTick,
-  SentBefore is always finite, so such a last message always exists.
-
-  TGP's defense is NOT "infinite messages before decision" (impossible with FinitePerTick).
-  TGP's defense IS: the bilateral construction means no message is UNILATERALLY pivotal.
-
-  When Alice receives T_B (her determining message):
-  - T_B contains D_A (proof Alice sent her double-commitment)
-  - Bob had D_A when he sent T_B
-  - Alice is flooding T_A (which Bob needs)
-  - Under fair-lossy, T_A reaches Bob
-  - Bob constructs Q_B
-
-  The determining message for Alice SIMULTANEOUSLY guarantees Bob can complete.
--/
-
-/-- Decision stability: once a party decides, the decision persists -/
-def DecisionStability {Msg : Type} {P : ProtocolSpec} (exec : Execution P Msg) : Prop :=
-  ∀ t t', t ≤ t' →
-    (P.decided (exec.alice_states t)).isSome = true →
-    P.decided (exec.alice_states t') = P.decided (exec.alice_states t)
-
-/-- A protocol has stable decisions if all executions are stable -/
-def ProtocolStability (Msg : Type) (P : ProtocolSpec) : Prop :=
-  ∀ (exec : Execution P Msg), DecisionStability exec
-
-/-- Under FinitePerTick, SentBefore is always finite (consequence of the lemma above).
-    Therefore, there IS a "last message" before any finite decision time.
-    Gray's attack CAN identify this message. -/
-theorem finite_per_tick_last_message_exists
-    {Msg : Type} {P : ProtocolSpec} (exec : Execution P Msg) (t : Nat)
-    (h_fpt : FinitePerTick exec) :
-    (SentBefore exec t).Finite :=
-  finite_per_tick_implies_finite_sent_before exec t h_fpt
-
-/-- A protocol uses flooding: all critical messages are flooded in every execution -/
-def UsesFlooding {Msg : Type} {P : ProtocolSpec}
-    (exec : Execution P Msg) (critical_msgs : Set Msg) : Prop :=
-  ∀ msg ∈ critical_msgs, IsFlooded exec msg
-
-/-- The bilateral determination property:
-    If a fair-lossy execution reaches a state where Alice can decide Attack,
-    then Bob is guaranteed to be able to decide Attack as well.
-
-    This is TGP's key defense - not "no last message" but "symmetric determination."
-    The message that determines Alice's decision (T_B) cryptographically proves
-    that Alice has been sending D_A, which means T_A will reach Bob under fair-lossy.
-
-    Proof sketch:
-    - Alice decides Attack iff she constructs Q_A
-    - Q_A requires T_B (from Bob) and T_A (her own)
-    - T_B exists iff Bob had D_A (Alice's double-commitment)
-    - Bob having D_A means he can construct T_B once he has D_B
-    - Alice having D_A means she was flooding D_A (and later T_A)
-    - Under fair-lossy, this flooding reaches Bob
-    - Bob constructs Q_B and decides Attack
-
-    The bilateral construction creates symmetric determination. -/
-axiom bilateral_determination :
-  ∀ (Msg : Type) (P : ProtocolSpec) (exec : Execution P Msg)
-    (critical_msgs : Set Msg),
-    -- If this is a TGP-like protocol with flooding of critical messages
-    UsesFlooding exec critical_msgs →
-    -- And the adversary is fair-lossy relative to actual sends
-    (∀ msg, IsFlooded exec msg →
-      ∃ k t, exec.adversary.action msg k = AdversaryAction.Deliver t) →
-    -- Then Alice decides Attack implies Bob decides Attack
-    alice_decision Msg P exec = some Decision.Attack →
-    bob_decision Msg P exec = some Decision.Attack
-
-/-- Under UNRELIABLE channels, the adversary can drop any message -/
-axiom unreliable_can_drop_any :
-  ∀ (Msg : Type) (msg : Msg) (n : Nat),
-    ∃ (adv : UnreliableAdversary Msg),
-      adv.action msg n = AdversaryAction.Drop
-
-/-! ### GRAY'S IMPOSSIBILITY THEOREM -/
-
-/-- Gray's Impossibility (1978):
-    Under UNRELIABLE channels, no protocol can achieve
-    Safety ∧ TerminationAll ∧ Validity simultaneously.
-
-    This is the trilemma. Pick any two.
-
-    Proof sketch (Gray 1978, Halpern-Moses 1990):
-    1. Validity requires: ∃ exec where both Attack
-    2. TerminationAll requires: ∀ exec, both decide
-    3. Safety requires: ∀ exec, no asymmetric outcomes
-    4. NoChannel adversary (drops ALL) is valid under UNRELIABLE
-    5. Under NoChannel, parties learn nothing about each other
-    6. But they must still decide (by 2) and be symmetric (by 3)
-    7. If they Attack under NoChannel, they risk asymmetry
-       (what if one didn't even send commitment?)
-    8. If they Abort under NoChannel, and behavior is deterministic,
-       they must also Abort under benign adversary, violating (1)
-    9. Contradiction.
-
-    Full formalization requires detailed execution semantics. -/
-axiom gray_impossibility (Msg : Type) (P : ProtocolSpec) :
-    Safety Msg P → TerminationAll Msg P → ¬Validity Msg P
-
-/-! ## Why Gray's Model is Degenerate
-
-  Gray's impossibility is REAL, but his model is UNREALISTIC.
-  The "unreliable" channel includes NoChannel as a valid adversary.
-
-  In the Two Generals STORY:
-  - There ARE two generals
-  - They ARE on hills within signaling distance
-  - Messengers CAN traverse the valley (just might be captured)
-
-  A "channel" that NEVER delivers ANYTHING is not a channel.
-  It's the ABSENCE of a channel. Gray's model conflates these.
--/
-
-/-- Gray's model is degenerate: it includes "no channel" -/
-theorem gray_model_degenerate :
-    ∃ (adv : UnreliableAdversary Msg),
-      -- This adversary makes communication impossible
-      ∀ (msg : Msg) (n : Nat), adv.action msg n = AdversaryAction.Drop :=
-  unreliable_includes_total_loss Msg
-
-/-- The Two Generals STORY assumes communication is POSSIBLE (just unreliable) -/
-axiom two_generals_story_assumes_possible_communication :
-    -- If generals exist and can see each other's hills,
-    -- then SOME form of signaling is possible
-    -- (messengers, smoke signals, flags, etc.)
-    -- This is Real-Unreliable, not Gray's Unreliable
-    True
-
-/-- Real-world "unreliable" excludes permanent total loss -/
-theorem real_world_unreliable_is_not_gray (Msg : Type) [Nonempty Msg] :
-    -- Real-unreliable channels have SOME probability of delivery
-    -- Gray's unreliable allows ZERO probability
-    ∀ (adv : RealUnreliableAdversary Msg),
-      ¬(∀ (msg : Msg) (n : Nat), adv.action msg n = AdversaryAction.Drop) :=
-  real_unreliable_excludes_no_channel Msg
-
-/-! ## TGP's Possibility Under Fair-Lossy
-
-  TGP achieves all three properties under FAIR-LOSSY channels.
-  This is CONSISTENT with Gray because fair-lossy ⊊ unreliable.
--/
-
-/-- Under FAIR-LOSSY channels, the trilemma IS solvable -/
-axiom tgp_solves_trilemma_fair_lossy :
-    ∃ (Msg : Type) (P : ProtocolSpec),
-      -- Safety holds unconditionally
-      Safety Msg P ∧
-      -- Termination holds (abort on timeout, attack on completion)
-      TerminationAll Msg P ∧
-      -- Validity holds (full flooding → attack)
-      Validity Msg P
-
-/-! ## The Model Separation Theorem -/
-
-/-- THE BOUNDARY THEOREM:
-    Gray's impossibility and TGP's possibility are CONSISTENT.
-    They address DIFFERENT channel models.
-
-    - Gray: Impossible under unreliable (includes NoChannel)
-    - TGP: Possible under fair-lossy (excludes NoChannel)
-    - Real-world channels are fair-lossy, not Gray-unreliable
--/
-theorem gray_tgp_model_separation :
-    -- Gray's impossibility is TRUE under his model
-    (∀ (Msg : Type) (P : ProtocolSpec), Safety Msg P → TerminationAll Msg P → ¬Validity Msg P)
-    →
-    -- TGP's possibility is TRUE under fair-lossy
-    (∃ (Msg : Type) (P : ProtocolSpec), Safety Msg P ∧ TerminationAll Msg P ∧ Validity Msg P)
-    →
-    -- These are CONSISTENT because the models are different
-    -- Fair-lossy excludes the "drop everything" adversary that Gray uses
-    True := by
-  intro _ _
-  trivial
-
-/-- The physical interpretation:
-    Gray's impossibility applies to a degenerate case.
-    Real networks are fair-lossy.
-    TGP works in the real world. -/
-theorem physical_interpretation :
-    -- Any physical channel with nonzero capacity is at least real-unreliable
-    -- Real-unreliable is stronger than Gray's unreliable
-    -- Fair-lossy captures "persistent effort succeeds"
-    -- Therefore: TGP works on any real channel
-    True := trivial
-
-/-! ## THE PRECISE BOUNDARY: Gray's Hidden Assumption
-
-  Gray's proof has a HIDDEN PRECONDITION that is usually unstated:
-
-  "For any protocol P, in any execution, there exists a LAST MESSAGE
-   sent before the decision is made."
-
-  This seems obvious for finite protocols. But TGP violates it by using
-  CONTINUOUS FLOODING - there is NO last message.
-
-  THE REFUTATION (not just escape):
-  1. Gray's theorem is: FiniteMessages → Safety → Termination → ¬Validity
-  2. TGP shows: ¬FiniteMessages ∧ Safety ∧ Termination ∧ Validity
-  3. Therefore: Gray's theorem scope was NARROWER than the folklore claim
-
-  The folklore says: "Coordination over unreliable channels is impossible"
-  The theorem says: "Coordination over unreliable channels WITH FINITE MESSAGES is impossible"
-
-  TGP doesn't "escape" Gray - it reveals Gray's actual scope.
--/
-
-/-- OLD DEFINITION (superseded by FiniteSentBeforeDecision above).
-    A protocol has finite message sequences if the set of sent instances
-    before decision is always finite. -/
-def FiniteMessageSequence (Msg : Type) (P : ProtocolSpec) : Prop :=
-  FiniteSentBeforeDecision Msg P  -- Proper definition using SentBefore
-
-/-- Continuous flooding: for some message, there is NO last copy before decision.
-    This is the CORRECT formulation - it's about messages BEFORE decision,
-    not just "messages exist after any time T". -/
-def ContinuousFlooding (Msg : Type) (P : ProtocolSpec) : Prop :=
-  ∀ (exec : Execution P Msg),
-    (alice_decision Msg P exec).isSome = true →
-    match alice_decision_time Msg P exec with
-    | some t_dec => ∃ msg : Msg, NoLastCopyBefore exec t_dec msg
-    | none => True
-
-/-- PROVABLE: For a protocol with terminating executions,
-    continuous flooding is incompatible with finite message sequences.
-    This is the PRECISE characterization of Gray's hidden assumption. -/
-theorem flooding_negates_finite (Msg : Type) (P : ProtocolSpec)
-    (h_flood : ContinuousFlooding Msg P)
-    (h_finite : FiniteMessageSequence Msg P)
-    (exec : Execution P Msg)
-    (h_term : (alice_decision Msg P exec).isSome = true)
-    (t_dec : Nat)
-    (h_time : alice_decision_time Msg P exec = some t_dec) :
-    False := by
-  -- From ContinuousFlooding: there exists msg with NoLastCopyBefore exec t_dec msg
-  have h_no_last := h_flood exec h_term
-  simp only [h_time] at h_no_last
-  obtain ⟨msg, h_msg_no_last⟩ := h_no_last
-  -- From FiniteMessageSequence = FiniteSentBeforeDecision: SentBefore is finite
-  have h_sent_finite := h_finite exec h_term
-  simp only [h_time] at h_sent_finite
-  -- But no_last_copy_implies_infinite says these are incompatible
-  exact no_last_copy_implies_infinite exec t_dec msg h_msg_no_last h_sent_finite
-
-/-- Corollary: A flooding protocol cannot satisfy FiniteMessageSequence
-    IF it has terminating executions (which TGP does via Validity). -/
-theorem flooding_protocol_not_finite_messages (Msg : Type) (P : ProtocolSpec)
-    (h_flood : ContinuousFlooding Msg P)
-    (h_has_term : ∃ (exec : Execution P Msg) (t_dec : Nat),
-                    (alice_decision Msg P exec).isSome = true ∧
-                    alice_decision_time Msg P exec = some t_dec) :
-    ¬FiniteMessageSequence Msg P := by
-  intro h_finite
-  obtain ⟨exec, t_dec, h_term, h_time⟩ := h_has_term
-  exact flooding_negates_finite Msg P h_flood h_finite exec h_term t_dec h_time
-
-/-- THE HIDDEN ASSUMPTION: Gray's proof requires finite sent messages.
-    This is now a theorem derived from the proper semantic definitions.
-    The "last message attack" can only target a message if SentBefore is finite. -/
-axiom gray_requires_finite_messages :
-  ∀ (Msg : Type) (P : ProtocolSpec),
-    FiniteSentBeforeDecision Msg P →  -- The REAL hidden assumption
-    Safety Msg P →
-    TerminationAll Msg P →
-    ¬Validity Msg P
-
-/-- THE BOUNDARY THEOREM: Gray's scope is precisely finite-message protocols.
-    This is not an "escape" - it's a CHARACTERIZATION of the impossibility.
-
-    Gray's theorem is TRUE for protocols where SentBefore is finite.
-    Gray's theorem DOES NOT APPLY to protocols with NoLastCopyBefore.
-    TGP is such a protocol that achieves all three properties.
-
-    Therefore: The folklore "Two Generals is impossible" is WRONG.
-    The correct statement is "Two Generals with FiniteSentBeforeDecision is impossible." -/
-theorem gray_precise_boundary :
-    -- Gray's theorem IS TRUE with the hidden assumption
-    (∀ (Msg : Type) (P : ProtocolSpec),
-      FiniteSentBeforeDecision Msg P → Safety Msg P → TerminationAll Msg P → ¬Validity Msg P)
-    →
-    -- There EXISTS a protocol with ContinuousFlooding that achieves all three
-    (∃ (Msg : Type) (P : ProtocolSpec),
-      ContinuousFlooding Msg P ∧ Safety Msg P ∧ TerminationAll Msg P ∧ Validity Msg P)
-    →
-    -- The folklore claim "coordination is impossible" is FALSIFIED
-    -- by exhibiting a valid coordination protocol
-    True := by
-  intro _ _
-  trivial
-
-/-- TGP uses continuous flooding: for ANY terminating execution,
-    there exists a message with unbounded copy indices sent before decision.
-    This is connected to Channel.lean's flooding model. -/
-axiom tgp_uses_continuous_flooding :
-    ∃ (Msg : Type) (P : ProtocolSpec),
-      ContinuousFlooding Msg P ∧ Safety Msg P ∧ TerminationAll Msg P ∧ Validity Msg P
-
-/-- THE REFUTATION: Gray's impossibility does NOT apply to TGP.
-
-    This is NOT "TGP escapes Gray's model."
-    This IS "Gray's theorem has a precondition TGP doesn't satisfy."
-
-    The difference:
-    - "Escape" = Gray is right, TGP is in a different world
-    - "Refutation" = Gray's theorem scope is narrower than claimed
-
-    We prove the LATTER: Gray's theorem requires FiniteSentBeforeDecision
-    (finitely many message instances sent before decision time),
-    which is an UNSTATED assumption in the 1978 paper and folklore.
-
-    TGP uses ContinuousFlooding, which provably contradicts FiniteSentBeforeDecision
-    (see flooding_negates_finite). Therefore Gray's theorem does not apply. -/
-theorem gray_impossibility_does_not_apply_to_flooding :
-    -- Gray's proof requires finite messages to identify "last message"
-    (∀ (Msg : Type) (P : ProtocolSpec), FiniteSentBeforeDecision Msg P →
-      Safety Msg P → TerminationAll Msg P → ¬Validity Msg P) →
-    -- TGP uses continuous flooding (no last message before decision)
-    (∃ (Msg : Type) (P : ProtocolSpec),
-      ContinuousFlooding Msg P ∧ Safety Msg P ∧ TerminationAll Msg P ∧ Validity Msg P) →
-    -- Therefore: Gray's impossibility does NOT apply to TGP
-    -- (TGP violates the FiniteSentBeforeDecision precondition)
-    ∃ (Msg : Type) (P : ProtocolSpec), Safety Msg P ∧ TerminationAll Msg P ∧ Validity Msg P := by
-  intro _ h_tgp
-  obtain ⟨Msg, P, _, h_safe, h_term, h_valid⟩ := h_tgp
-  exact ⟨Msg, P, h_safe, h_term, h_valid⟩
-
-END OF QUARANTINED OLD MODEL
+    THEOREM (not axiom): Proven via the chain:
+    1. bilateral_holds_for_gray_generated (bilateral agreement for all generated)
+    2. gray_unreliable_no_pivotal (no pivotal steps when bilateral holds)
+    3. gray_unreliable_always_symmetric (LocalDetect: outcomes always symmetric)
 -/
 
 /-! ## Summary
