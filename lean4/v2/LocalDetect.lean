@@ -771,4 +771,199 @@ theorem generated_exec_simulates_bool (exec : ExecutionState) (h_gen : Generated
 #check derive_execution_simulates_bool
 #check generated_exec_simulates_bool
 
+/-! ## Pivotal Delivery and Gray's Hidden Assumption
+
+    Gray's impossibility argument requires the existence of a "last pivotal message" -
+    a delivery event that, if removed, changes exactly one party's decision while
+    leaving the other unchanged. This creates the asymmetry that proves impossibility.
+
+    We show that TGP has NO pivotal deliveries: any change that affects Alice's
+    decision also affects Bob's decision (and vice versa). This is the
+    BILATERAL DETERMINATION property.
+-/
+
+/-! ### Modified Executions
+
+    To define "pivotal", we need to compare executions that differ in one delivery.
+    In our model, this means comparing executions under different channel states.
+    We use BidirectionalChannel with derive_execution_with_channel.
+-/
+
+/-- Modify a channel by blocking one direction. -/
+def block_channel_direction (ch : BidirectionalChannel) (dir : Channel.Direction) :
+    BidirectionalChannel :=
+  match dir with
+  | .AliceToBob => ⟨Channel.ChannelState.Partitioned, ch.bob_to_alice⟩
+  | .BobToAlice => ⟨ch.alice_to_bob, Channel.ChannelState.Partitioned⟩
+
+/-- The execution resulting from blocking a direction. -/
+def execution_with_blocked_channel (ch : BidirectionalChannel) (deps : CreationDependencies)
+    (dir : Channel.Direction) : ExecutionState :=
+  derive_execution_with_channel (block_channel_direction ch dir) deps
+
+/-- Alice's decision in an execution (Attack = true, Abort = false). -/
+def alice_decides_attack (exec : ExecutionState) : Bool :=
+  alice_attacks_exec (alice_exec_view exec)
+
+/-- Bob's decision in an execution. -/
+def bob_decides_attack (exec : ExecutionState) : Bool :=
+  bob_attacks_exec (bob_exec_view exec)
+
+/-! ### Pivotal Definition
+
+    A delivery direction is PIVOTAL if blocking it changes exactly one party's decision.
+    This is Gray's key construction: find the "last" such pivotal event.
+-/
+
+/-- A direction is pivotal for Alice if blocking it changes Alice's decision
+    but not Bob's decision. -/
+def PivotalForAlice (ch : BidirectionalChannel) (deps : CreationDependencies)
+    (dir : Channel.Direction) : Prop :=
+  let exec := derive_execution_with_channel ch deps
+  let exec' := execution_with_blocked_channel ch deps dir
+  alice_decides_attack exec ≠ alice_decides_attack exec' ∧
+  bob_decides_attack exec = bob_decides_attack exec'
+
+/-- A direction is pivotal for Bob if blocking it changes Bob's decision
+    but not Alice's decision. -/
+def PivotalForBob (ch : BidirectionalChannel) (deps : CreationDependencies)
+    (dir : Channel.Direction) : Prop :=
+  let exec := derive_execution_with_channel ch deps
+  let exec' := execution_with_blocked_channel ch deps dir
+  bob_decides_attack exec ≠ bob_decides_attack exec' ∧
+  alice_decides_attack exec = alice_decides_attack exec'
+
+/-- A direction is pivotal if it's pivotal for exactly one party. -/
+def Pivotal (ch : BidirectionalChannel) (deps : CreationDependencies)
+    (dir : Channel.Direction) : Prop :=
+  PivotalForAlice ch deps dir ∨ PivotalForBob ch deps dir
+
+/-! ### Bilateral Determination
+
+    The key property: Alice attacks IFF Bob attacks. This is what makes
+    pivotal events impossible.
+
+    For channel-based executions, this holds because the attack condition
+    depends on SYMMETRIC receipt of T messages.
+-/
+
+/-- Bilateral determination for channel-based executions.
+    For any channel and dependencies, Alice attacks iff Bob attacks. -/
+def BilateralDeterminationChannel : Prop :=
+  ∀ (ch : BidirectionalChannel) (deps : CreationDependencies),
+    let exec := derive_execution_with_channel ch deps
+    alice_decides_attack exec = bob_decides_attack exec
+
+/-! ### Proving Bilateral Determination for Channels
+
+    The key insight: under derive_execution_with_channel, the attack condition
+    requires BOTH directions to work. If either is blocked, neither attacks.
+    If both work, both attack (given full participation).
+-/
+
+/-- Bilateral determination holds for channel-based executions. -/
+theorem channel_bilateral_determination : BilateralDeterminationChannel := by
+  intro ch deps
+  simp only [alice_decides_attack, bob_decides_attack, alice_attacks_exec, bob_attacks_exec]
+  simp only [alice_exec_view, bob_exec_view, derive_execution_with_channel]
+  -- The attack condition for Alice: received_D_B && received_T_B && sent_T_A
+  -- The attack condition for Bob: received_D_A && received_T_A && sent_T_B
+  -- By construction of derive_execution_with_channel, these are symmetric:
+  -- both require both channel directions to work
+  simp only [channel_delivers]
+  -- Both expressions reduce to Bool.and chains that are symmetric in channel state
+  cases ch.alice_to_bob <;> cases ch.bob_to_alice <;>
+  cases deps.alice_creates_c <;> cases deps.bob_creates_c <;>
+  cases deps.alice_creates_d_after_c <;> cases deps.bob_creates_d_after_c <;>
+  cases deps.alice_creates_t_after_d <;> cases deps.bob_creates_t_after_d <;>
+  native_decide
+
+/-! ### The Anti-Pivotality Theorem
+
+    If bilateral determination holds, no direction can be pivotal.
+    This is the formal statement that Gray's construction cannot be applied to TGP.
+-/
+
+/-- If decisions are bilaterally determined, no direction is pivotal for Alice. -/
+theorem bilateral_implies_not_pivotal_alice
+    (h_bilateral : BilateralDeterminationChannel)
+    (ch : BidirectionalChannel) (deps : CreationDependencies) (dir : Channel.Direction) :
+    ¬ PivotalForAlice ch deps dir := by
+  intro ⟨h_alice_changes, h_bob_same⟩
+  -- Bilateral determination says Alice = Bob in both executions
+  have h1 : alice_decides_attack (derive_execution_with_channel ch deps)
+          = bob_decides_attack (derive_execution_with_channel ch deps) :=
+    h_bilateral ch deps
+  have h2 : alice_decides_attack (execution_with_blocked_channel ch deps dir)
+          = bob_decides_attack (execution_with_blocked_channel ch deps dir) :=
+    h_bilateral (block_channel_direction ch dir) deps
+  -- Unfold execution_with_blocked_channel everywhere so patterns match
+  simp only [execution_with_blocked_channel] at h2 h_alice_changes h_bob_same
+  -- Now derive contradiction:
+  -- h_alice_changes: alice(exec) ≠ alice(exec')
+  -- h_bob_same: bob(exec) = bob(exec')
+  -- h1: alice(exec) = bob(exec)
+  -- h2: alice(exec') = bob(exec')
+  -- So: alice(exec) = bob(exec) = bob(exec') = alice(exec')
+  -- Contradiction with h_alice_changes
+  rw [h1, h2] at h_alice_changes
+  exact h_alice_changes h_bob_same
+
+/-- If decisions are bilaterally determined, no direction is pivotal for Bob. -/
+theorem bilateral_implies_not_pivotal_bob
+    (h_bilateral : BilateralDeterminationChannel)
+    (ch : BidirectionalChannel) (deps : CreationDependencies) (dir : Channel.Direction) :
+    ¬ PivotalForBob ch deps dir := by
+  intro ⟨h_bob_changes, h_alice_same⟩
+  have h1 : alice_decides_attack (derive_execution_with_channel ch deps)
+          = bob_decides_attack (derive_execution_with_channel ch deps) :=
+    h_bilateral ch deps
+  have h2 : alice_decides_attack (execution_with_blocked_channel ch deps dir)
+          = bob_decides_attack (execution_with_blocked_channel ch deps dir) :=
+    h_bilateral (block_channel_direction ch dir) deps
+  -- Unfold execution_with_blocked_channel everywhere so patterns match
+  simp only [execution_with_blocked_channel] at h2 h_bob_changes h_alice_same
+  rw [← h1, ← h2] at h_bob_changes
+  exact h_bob_changes h_alice_same
+
+/-- THE ANTI-PIVOTALITY THEOREM:
+    If bilateral determination holds, no direction can be pivotal.
+    This is why Gray's impossibility argument does not apply to TGP. -/
+theorem bilateral_implies_no_pivotal
+    (h_bilateral : BilateralDeterminationChannel)
+    (ch : BidirectionalChannel) (deps : CreationDependencies) (dir : Channel.Direction) :
+    ¬ Pivotal ch deps dir := by
+  intro h_piv
+  cases h_piv with
+  | inl h_alice => exact bilateral_implies_not_pivotal_alice h_bilateral ch deps dir h_alice
+  | inr h_bob => exact bilateral_implies_not_pivotal_bob h_bilateral ch deps dir h_bob
+
+/-! ### The Main Result: TGP Has No Pivotal Events -/
+
+/-- TGP has no pivotal delivery events. Gray's construction cannot be applied. -/
+theorem tgp_no_pivotal (ch : BidirectionalChannel) (deps : CreationDependencies)
+    (dir : Channel.Direction) : ¬ Pivotal ch deps dir :=
+  bilateral_implies_no_pivotal channel_bilateral_determination ch deps dir
+
+/-! ### Gray's Hidden Assumption Exposed
+
+    Gray's impossibility proof implicitly assumes:
+    "There exists a last pivotal message whose delivery can be toggled
+     to change exactly one party's decision."
+
+    TGP violates this assumption: the bilateral construction ensures that
+    any change affecting one party's decision MUST affect the other's.
+
+    Therefore: Gray's proof technique is inapplicable to TGP.
+    This is not "escaping" Gray - it's showing his proof has a precondition
+    that TGP does not satisfy.
+-/
+
+/-- Gray's proof requires pivotal events to exist. TGP has none. -/
+theorem gray_precondition_violated :
+    ∀ (ch : BidirectionalChannel) (deps : CreationDependencies),
+      ¬ ∃ dir, Pivotal ch deps dir := by
+  intro ch deps ⟨dir, h_piv⟩
+  exact tgp_no_pivotal ch deps dir h_piv
+
 end LocalDetect
