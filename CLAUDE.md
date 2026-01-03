@@ -60,6 +60,41 @@ This is not "model separation." This is breaking Gray's impossibility by violati
 
 ---
 
+## ⚠️ CRITICAL: RECEIVING T_A OR T_B DOES NOT DETERMINE AN ATTACK ⚠️
+
+**Receiving T_A or T_B is NOT the attack decision.**
+
+The attack key is what *allows* a decision to occur safely. It does NOT *determine* the decision.
+
+```
+WRONG:  Alice receives T_B → Alice attacks
+RIGHT:  Alice can compute attack_key → Alice CAN SAFELY attack
+```
+
+**THE LEVER IS NOT T_A/T_B DELIVERY. THE LEVER IS ATTACK KEY COMPUTABILITY.**
+
+The attack key requires ALL THREE components (tripartite construction):
+```lean
+attack_key_emerges v alice_resp bob_resp
+  -- ALL THREE must be Some, or attack_key = none
+```
+
+Even if Alice has T_B in her hands, she cannot *compute the attack key* unless the full tripartite construction completed. And if Bob couldn't respond (because he never got D_A), then `bob_resp = none`, so `attack_key = none` **FOR BOTH PARTIES**.
+
+**Local Computation Model:**
+- `aliceCanComputeAttackKey`: Can Alice LOCALLY DERIVE that the attack key exists?
+- `bobCanComputeAttackKey`: Can Bob LOCALLY DERIVE that the attack key exists?
+
+**The THEOREM is: their local inferences AGREE.**
+
+Not because they consult the same oracle. Because the embedding structure of T_A and T_B **cryptographically proves** the same underlying bilateral state.
+
+This is what `LocalDetect.local_views_agree` already proves!
+
+**Keep this distinction clear or we will be dinged on review.**
+
+---
+
 ## Executive Summary
 
 This project delivers a **formally verifiable, publicly defensible solution** to the Two Generals Problem (Gray's Common Knowledge Impossibility, 1978) and extends it to full Byzantine Fault Tolerance. For fifty years, distributed systems theory has treated these problems as fundamentally unsolvable or requiring complex multi-round protocols. We prove this interpretation incorrect through cryptographic proof stapling, continuous flooding, and self-certifying artifacts.

@@ -584,9 +584,26 @@ theorem silent_has_zero_count (exec : Execution P Msg) (T : Nat)
 theorem removal_decreases_count (exec exec' : Execution P Msg) (T t : Nat) (m : Msg)
     (h_remove : RemoveDelivery exec exec' t m) (h_t_le : t ≤ T) :
     DeliveryCount exec' T < DeliveryCount exec T := by
-  -- After removal, we have one fewer message in delivered t
-  -- So AllDeliveredUpTo decreases, hence DeliveryCount decreases
-  sorry  -- Proof requires multiset arithmetic
+  -- Unpack RemoveDelivery
+  obtain ⟨_, h_other, h_mem, h_erase⟩ := h_remove
+  unfold DeliveryCount AllDeliveredUpTo
+  -- The sum over range (T+1) includes t since t ≤ T
+  have h_t_in : t ∈ Finset.range (T + 1) := Finset.mem_range.mpr (Nat.lt_succ_of_le h_t_le)
+  -- At t: exec'.delivered t = (exec.delivered t).erase m, which has card one less
+  have h_card_lt : (exec'.delivered t).card < (exec.delivered t).card := by
+    rw [h_erase]
+    exact Multiset.card_erase_lt_of_mem h_mem
+  -- The other terms are equal
+  have h_other_eq : ∀ τ, τ ≠ t → exec'.delivered τ = exec.delivered τ := h_other
+  -- Use Multiset.card_sum to convert to sum of cards
+  simp only [Multiset.card_sum]
+  -- Use Finset.sum_lt_sum: need ∀ i, f i ≤ g i and ∃ j ∈ s, f j < g j
+  apply Finset.sum_lt_sum
+  · intro τ _
+    by_cases h_eq : τ = t
+    · subst h_eq; exact le_of_lt h_card_lt
+    · rw [h_other_eq τ h_eq]
+  · exact ⟨t, h_t_in, h_card_lt⟩
 
 /-- If generator has closure and exec has deliveries, we can remove one. -/
 theorem can_remove_if_has_deliveries
@@ -596,9 +613,19 @@ theorem can_remove_if_has_deliveries
     (h_gen : Gen exec)
     (h_has_delivery : DeliveryCount exec T > 0) :
     ∃ exec' t m, Gen exec' ∧ t ≤ T ∧ RemoveDelivery exec exec' t m := by
-  -- DeliveryCount > 0 means some message was delivered at some t ≤ T
-  -- Use closure to remove it
-  sorry  -- Proof requires extracting a message from AllDeliveredUpTo
+  -- DeliveryCount > 0 means AllDeliveredUpTo is nonempty
+  unfold DeliveryCount at h_has_delivery
+  have h_exists : ∃ m, m ∈ AllDeliveredUpTo exec T := Multiset.card_pos_iff_exists_mem.mp h_has_delivery
+  obtain ⟨m, h_m_in⟩ := h_exists
+  -- m is in the sum of delivered multisets, so it's in some exec.delivered t for t ≤ T
+  unfold AllDeliveredUpTo at h_m_in
+  rw [Multiset.mem_sum] at h_m_in
+  obtain ⟨t, h_t_in, h_m_in_t⟩ := h_m_in
+  -- t ∈ Finset.range (T + 1) means t ≤ T
+  have h_t_le : t ≤ T := Nat.lt_succ_iff.mp (Finset.mem_range.mp h_t_in)
+  -- Apply closure to get exec' with m removed at time t
+  obtain ⟨exec', h_gen', h_remove⟩ := hclosure exec t m h_gen h_m_in_t
+  exact ⟨exec', t, m, h_gen', h_t_le, h_remove⟩
 
 /-! ### The Discrete Path Argument
 
