@@ -34,6 +34,18 @@ See `lean4/v2/Emergence.lean` for the formal model.
 
 ---
 
+## ⚠️ CRITICAL: RESPECT EXISTING CODE ⚠️
+
+**Before making ANY changes:**
+1. **Read existing code** in the relevant directory first
+2. **Understand existing patterns** before proposing new ones
+3. **v2 (`lean4/v2/`) is the canonical implementation** - do not reference v1 patterns
+4. **No timeouts in the core protocol** - timeouts are an implementation detail, not part of TGP
+
+The formal proofs in `lean4/v2/` are the authoritative specification. If you're unsure about protocol semantics, read the Lean code first.
+
+---
+
 ## ⚠️ CRITICAL: BANNED ACTIONS ⚠️
 
 **Git-based reverts without explicit user permission are BANNED.**
