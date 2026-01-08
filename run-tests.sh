@@ -61,7 +61,11 @@ echo ""
 
 # Run cargo test - filter out download/compile noise, show test results
 set -o pipefail
-cargo test 2>&1 | grep -v -e "^[[:space:]]*Compiling" -e "^[[:space:]]*Downloading" -e "^[[:space:]]*Downloaded" -e "^[[:space:]]*Updating" -e "^[[:space:]]*Fetch" -e "^[[:space:]]*Locking" || RUST_FAILED=1
+if  which cargo-nextest &> /dev/null; then
+	cargo nextest run
+else
+	cargo test 2>&1 | grep -v -e "^[[:space:]]*Compiling" -e "^[[:space:]]*Downloading" -e "^[[:space:]]*Downloaded" -e "^[[:space:]]*Updating" -e "^[[:space:]]*Fetch" -e "^[[:space:]]*Locking" || RUST_FAILED=1
+fi
 set +o pipefail
 
 cd ..
