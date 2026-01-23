@@ -966,4 +966,18 @@ theorem gray_precondition_violated :
   intro ch deps ⟨dir, h_piv⟩
   exact tgp_no_pivotal ch deps dir h_piv
 
+/-! ### Trust Boundary Verification
+
+    Verify that the core bilateral determination proof does NOT depend on
+    external axioms like gray_impossibility. Only standard Lean axioms should appear. -/
+
+-- Core theorem: Exhaustive bilateral determination (256-case proof)
+#print axioms channel_bilateral_determination
+
+-- Core theorem: No pivotal events exist in TGP
+#print axioms tgp_no_pivotal
+
+-- Core theorem: Gray's precondition is violated
+#print axioms gray_precondition_violated
+
 end LocalDetect

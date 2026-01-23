@@ -660,6 +660,19 @@ theorem closure_enables_path (Gen : Execution P Msg → Prop)
     ∃ exec', Gen exec' ∧ RemoveDelivery exec exec' t m :=
   hclosure exec t m h_gen h_mem
 
+/-! ### Gray's Path Axioms (Theoretical Framework Only)
+
+    The following two axioms formalize Gray's path construction argument.
+    They are NOT used in TGP correctness proofs because TGP BREAKS closure
+    (proven in GrayInterp.fair_lossy_not_closed_under_removal).
+
+    These axioms model "what IF closure held" - a hypothetical that doesn't
+    apply to TGP under fair-lossy semantics.
+
+    Status: Mathematically sound axioms (discrete IVT + closure construction).
+    Could be proven with tedious induction, but since they're never invoked
+    for TGP proofs, we leave them as axioms documenting Gray's framework. -/
+
 /-- AXIOM (Discrete IVT): If outcomes differ between path endpoints and path is valid,
     there's a step where exactly one decision changes.
 
@@ -668,7 +681,7 @@ theorem closure_enables_path (Gen : Execution P Msg → Prop)
     - Each step changes at most the delivered messages
     - Therefore some step must be the "first asymmetric change"
 
-    We axiomatize this because the induction is tedious but mathematically obvious. -/
+    NOTE: Not used in TGP proofs (TGP breaks closure). -/
 axiom path_has_pivotal_step
     (Gen : Execution P Msg → Prop)
     (e_start e_end : Execution P Msg)
@@ -696,7 +709,7 @@ axiom path_has_pivotal_step
     - Eventually reach an execution with subset of e_bad's deliveries
     - Then add messages to reach e_bad (reverse direction of removal)
 
-    We axiomatize because the construction is tedious but follows from closure. -/
+    NOTE: Not used in TGP proofs (TGP breaks closure). -/
 axiom path_exists_from_closure
     (Gen : Execution P Msg → Prop)
     (hclosure : ClosedUnderRemoval Gen)
@@ -826,12 +839,24 @@ end GrayDerived
   parties learn nothing about each other, yet must still decide.
 -/
 
-/-- Gray's Impossibility: Under unreliable channels, the trilemma is unsolvable.
-    Proof: NoChannel adversary forces both parties to decide with zero information.
-    They must be symmetric (Safety) and both decide (Termination).
-    But if they Attack under NoChannel, they risk asymmetry if one didn't commit.
-    If they Abort under NoChannel, they can't Attack under good conditions (Validity).
-    Contradiction. -/
+/-- EXTERNAL ASSUMPTION: Gray's Impossibility Theorem (1978)
+
+    Under unreliable channels, the trilemma is unsolvable:
+    - Safety: No asymmetric outcomes
+    - Termination: Both parties always decide
+    - Validity: Attack when coordination succeeds
+
+    This is Gray's original result. We accept it as given because:
+    1. It's a well-established external theorem (1978)
+    2. TGP doesn't need to prove it - we accept it and work around it
+    3. TGP's contribution is showing Two Generals IS solvable with a
+       DIFFERENT correctness spec (two-branch: abort/attack)
+
+    Gray proved: ∀P. ¬(Safety ∧ Termination ∧ Validity)
+    TGP proves: ∃P. Agreement ∧ TotalTermination ∧ AbortOnNoChannel ∧ AttackOnLive
+
+    These are COMPATIBLE because TGP's AbortOnNoChannel replaces Gray's Validity
+    under the NoChannel adversary. The "escape" is legitimate: different spec. -/
 axiom gray_impossibility :
   ∀ (P : ProtocolSpec) (Msg : Type) [DecidableEq Msg],
     -- For any protocol, under unreliable channels (including NoChannel):
@@ -850,27 +875,22 @@ axiom gray_impossibility :
   Gray's proof requires a last message to attack. Flooding eliminates it.
 -/
 
-/-- Bilateral Determination: In TGP, if Alice decides Attack,
-    Bob MUST also decide Attack. This holds under UNRELIABLE channels
-    because the bilateral construction creates symmetric determination.
+/- Bilateral Determination: In TGP, if Alice decides Attack,
+   Bob MUST also decide Attack. This holds under UNRELIABLE channels
+   because the bilateral construction creates symmetric determination.
 
-    Alice deciding Attack means she has Q_A, which requires T_B.
-    T_B proves Bob had D_A. Alice is flooding T_A.
-    Under ANY non-degenerate channel, T_A reaches Bob.
-    Bob constructs Q_B and decides Attack.
+   Alice deciding Attack means she has Q_A, which requires T_B.
+   T_B proves Bob had D_A. Alice is flooding T_A.
+   Under ANY non-degenerate channel, T_A reaches Bob.
+   Bob constructs Q_B and decides Attack.
 
-    The adversary CANNOT create asymmetry because the determining
-    message for Alice (T_B) cryptographically proves Bob can complete. -/
-axiom bilateral_determination :
-  ∀ (P : ProtocolSpec) (Msg : Type) [DecidableEq Msg]
-    (exec : Execution P Msg),
-    -- Channel is sound (can't deliver phantom messages)
-    ChannelSound exec →
-    -- Protocol uses flooding (unbounded sends)
-    (∀ msg, IsFlooded exec msg → ∃ t, (exec.delivered t).count msg > 0) →
-    -- Then Alice attacking implies Bob attacks
-    alice_decision exec = some Decision.Attack →
-    bob_decision exec = some Decision.Attack
+   The adversary CANNOT create asymmetry because the determining
+   message for Alice (T_B) cryptographically proves Bob can complete.
+
+   PROVEN: LocalDetect.channel_bilateral_determination provides an exhaustive
+   proof via case analysis over all channel/dependency configurations.
+   That theorem is used in LocalDetect.tgp_no_pivotal to show Gray's
+   construction is inapplicable to TGP. -/
 
 /- TGP Full Correctness: The complete four-part specification FOR GENERATED EXECUTIONS.
 
@@ -1002,10 +1022,19 @@ axiom bilateral_determination :
   - AttackOnLive: ∀ exec, IsFairLossy → both attack
   - FiniteTimeTermination: ∃ T, ∀ exec, both decide by time T
 
-  KEY AXIOMS:
+  EXTERNAL ASSUMPTIONS (accepted as given):
   - gray_impossibility: NoChannel → ¬(Safety ∧ Termination ∧ Validity)
-  - bilateral_determination: (flooding delivers) → (Alice attacks → Bob attacks)
-  - tgp_correctness: ∃ P, Agreement ∧ TotalTermination ∧ AbortOnNoChannel ∧ AttackOnLive
+    → Gray's 1978 impossibility theorem. TGP works AROUND it with different spec.
+
+  PATH AXIOMS (theoretical framework, not used in TGP proofs):
+  - path_has_pivotal_step: Discrete IVT for removal paths
+  - path_exists_from_closure: Path construction from closure property
+    → These model Gray's argument. TGP breaks closure, so paths never constructed.
+
+  PROVEN THEOREMS:
+  - bilateral_determination → LocalDetect.channel_bilateral_determination (exhaustive)
+  - fair_lossy_not_closed_under_removal → GrayInterp (proven)
+  - fair_lossy_implies_tgp_reachable → GrayInterp (proven)
 
   THE PRECISE CLAIM:
   Gray's theorem assumes ONE deterministic outcome under NoChannel.
