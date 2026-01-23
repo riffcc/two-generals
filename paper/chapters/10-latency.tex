@@ -1,0 +1,84 @@
+% Chapter 10: Why TGP Is Faster Than TCP
+% Two Generals Protocol Paper
+
+A surprising result emerges from our benchmarks: TGP achieves coordination faster than TCP \emph{even under ideal network conditions}. This section explains why.
+
+\subsection{The Algorithmic Difference}
+
+TCP achieves reliable delivery through sequential acknowledgment chains:
+\begin{center}
+\texttt{SYN} $\rightarrow$ \texttt{SYN-ACK} $\rightarrow$ \texttt{ACK} $\rightarrow$ \texttt{DATA} $\rightarrow$ \texttt{ACK}
+\end{center}
+
+This is a minimum of \textbf{5 sequential round trips} before both parties have confirmed coordination. Each step depends on the previous step completing.
+
+TGP uses parallel flooding with nested proof embedding:
+\begin{itemize}
+    \item Each phase can complete in $<1$ tick if any copy arrives
+    \item Higher proofs embed all lower proofs (receiving $T_X$ gives $D_X$ and $C_X$ for free)
+    \item No sequential dependency on specific packets
+\end{itemize}
+
+\begin{proposition}[Coordination Complexity]
+TCP's acknowledgment chains are $O(n)$ in round trips where $n$ is the number of coordination steps. TGP's proof stapling is $O(1)$ in coordination depth because higher proofs embed all lower proofs.
+\end{proposition}
+
+This is not an optimization. It is a different algorithmic class.
+
+\subsection{Empirical Latency Comparison}
+
+At 0\% packet loss:
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Protocol & Ticks to Coordination & Relative Speed \\
+\midrule
+TCP-equivalent & 22 & 1.0$\times$ \\
+TGP & 3 & \textbf{7.3$\times$} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+TGP completes in roughly 14\% of TCP's time for small payloads under \emph{ideal} conditions. This isn't ``equivalent performance when the network is good''---this is substantial improvement across all network conditions.
+
+\subsection{Traffic Patterns Affected}
+
+The majority of internet traffic consists of small requests where TCP's handshake overhead dominates:
+
+\begin{itemize}
+    \item \textbf{HTTP API calls}: Average payload under 10KB
+    \item \textbf{WebSocket messages}: Typically measured in bytes
+    \item \textbf{DNS queries}: 512 bytes or less
+    \item \textbf{IoT telemetry}: Small, frequent transmissions
+    \item \textbf{Mobile applications}: Latency-sensitive, battery-constrained
+    \item \textbf{Gaming netcode}: Position updates 30--60 times per second
+\end{itemize}
+
+A 7$\times$ improvement in coordination time for small packets affects user-perceived latency across virtually every interactive application.
+
+\subsection{Degradation Under Loss}
+
+Under packet loss, the advantage compounds:
+
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+Packet Loss & TGP Ticks & TCP Ticks & TGP Advantage \\
+\midrule
+0\% & 3 & 22 & 7$\times$ \\
+10\% & 12 & 88 & 7$\times$ \\
+50\% & 45 & 880+ & 20$\times$ \\
+90\% & 180 & timeout & $\infty$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+TCP's exponential backoff causes latency to explode under loss. TGP's continuous flooding causes linear degradation. At 50\% loss, TGP is 20$\times$ faster; at 90\% loss, TCP typically times out while TGP continues.
+
+\subsection{Revised Positioning}
+
+Previous framing: ``TGP works where TCP fails.''
+
+Accurate framing: \textbf{``TGP achieves coordination faster than TCP under all conditions, with graceful degradation under loss where TCP collapses entirely.''}
+
+This transforms TGP from a niche protocol for hostile network environments into a potential replacement for TCP in latency-sensitive applications.

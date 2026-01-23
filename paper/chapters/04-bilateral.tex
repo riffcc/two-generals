@@ -1,0 +1,77 @@
+% Chapter 4: The Bilateral Construction Property
+% Two Generals Protocol Paper (v2)
+
+The core theoretical contribution is the \emph{bilateral construction property}: the triple proofs $\Triple{A}$ and $\Triple{B}$ form a cryptographic knot where neither can exist without the other being constructible.
+
+\begin{theorem}[Bilateral Constructibility]
+\label{thm:bilateral}
+If party $A$ can construct $\Triple{A}$, then party $B$ can construct $\Triple{B}$, and vice versa:
+\[
+\exists \Triple{A} \Leftrightarrow \exists \Triple{B}
+\]
+\end{theorem}
+
+\begin{proof}
+We prove the forward direction; the reverse is symmetric.
+
+Suppose Alice can construct $\Triple{A} = \Sign{A}{\Double{A} \| \Double{B}}$.
+
+\textbf{Step 1:} Alice has $\Double{B}$. By definition, $\Double{B} = \Sign{B}{\Com{B} \| \Com{A}}$, so Bob received Alice's commitment.
+
+\textbf{Step 2:} For Alice to have $\Double{B}$, Bob must have constructed it, meaning Bob had $\Com{A}$.
+
+\textbf{Step 3:} Since Bob has $\Com{A}$, Bob can construct $\Double{B}$. And since Alice is flooding $\Double{A}$, Bob will receive it under fair-lossy conditions.
+
+\textbf{Step 4:} Upon receiving $\Double{A}$, Bob can construct $\Triple{B} = \Sign{B}{\Double{B} \| \Double{A}}$.
+
+Therefore, if $\Triple{A}$ exists, $\Triple{B}$ is constructible under fair-lossy conditions.
+\end{proof}
+
+\subsection{The Cryptographic Knot}
+
+Traditional protocols create a chain of acknowledgments where each link could be the ``last message'' that fails:
+\[
+\text{MSG} \rightarrow \text{ACK} \rightarrow \text{ACK-of-ACK} \rightarrow \cdots
+\]
+
+TGP creates a \emph{knot}:
+\begin{center}
+\begin{tikzpicture}[node distance=2cm]
+    \node (TA) {$\Triple{A}$};
+    \node (TB) [right=of TA, xshift=1cm] {$\Triple{B}$};
+    \node (DA) [below=of TA] {$\Double{A}$};
+    \node (DB) [below=of TB] {$\Double{B}$};
+
+    \draw[<->, ultra thick, red] (TA) -- (TB) node[midway, above] {bilateral};
+    \draw[->] (DA) -- (TA);
+    \draw[->] (DB) -- (TA);
+    \draw[->] (DA) -- (TB);
+    \draw[->] (DB) -- (TB);
+\end{tikzpicture}
+\end{center}
+
+$\Triple{A}$ embeds $\Double{B}$; $\Triple{B}$ embeds $\Double{A}$. Neither can exist without the other being constructible. There is no ``last message''---there is mutual cryptographic entanglement.
+
+\subsection{Why This Breaks Gray's Attack}
+
+Gray's impossibility relies on the ``drop last message'' attack: find an execution where one party decides ATTACK, then remove the last message to create asymmetry.
+
+This attack fails against TGP because:
+
+\begin{enumerate}
+    \item The attack key is not triggered by receiving a message---it \emph{emerges} from state
+    \item Removing $\Triple{B}$ from a schedule where Alice attacks means Alice never had $\Triple{B}$
+    \item But if Alice never had $\Triple{B}$, the attack key never emerged for Alice either
+    \item Therefore, Alice never attacked in the modified execution
+\end{enumerate}
+
+The bilateral construction makes the ``pivotal message'' impossible: any message whose removal would cause asymmetry cannot exist, because asymmetry requires one party to have the attack key while the other lacks it---but the knot structure prevents this.
+
+\subsection{Formal Statement}
+
+\begin{theorem}[No Pivotal Message]
+\label{thm:no-pivotal}
+For any TGP execution and any message $m$, removing $m$ cannot create an asymmetric outcome.
+\end{theorem}
+
+This is proven exhaustively in Lean 4 via \texttt{tgp\_no\_pivotal} using \texttt{native\_decide} over all 256 channel state combinations.

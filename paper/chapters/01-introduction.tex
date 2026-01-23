@@ -1,0 +1,64 @@
+% Chapter 1: Introduction
+% Two Generals Protocol Paper (v2)
+
+The Two Generals Problem, first formalized by Akkoyunlu et al.~\cite{akkoyunlu1975some} and later analyzed by Gray~\cite{gray1978notes}, asks whether two parties can coordinate an action over an unreliable channel. Halpern and Moses~\cite{halpern1990knowledge} proved that \emph{common knowledge}---the infinite hierarchy of ``I know that you know that I know...''---cannot be achieved with finite message sequences over lossy channels.
+
+This result has been interpreted as an impossibility: if common knowledge is required for coordination, and common knowledge is impossible, then coordination must be impossible. We challenge this interpretation.
+
+\paragraph{Key Insight.} Instead of attempting to achieve common knowledge through acknowledgment chains, we construct \emph{bilateral cryptographic artifacts} where the existence of each artifact cryptographically proves the constructibility of its counterpart. The triple proofs $T_A$ and $T_B$ form a \emph{knot}---neither can exist without the other being constructible. This eliminates the ``last message'' problem entirely (see Figure~\ref{fig:chain-vs-knot}).
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm,
+    msg/.style={draw, rounded corners, minimum height=0.6cm, minimum width=1.2cm, font=\small},
+    arrow/.style={-{Stealth[length=2mm]}, thick}
+]
+% Chain (left side)
+\node at (-3.5, 2.5) {\textbf{Traditional: Acknowledgment Chain}};
+\node[msg] (m1) at (-4.5, 1.5) {MSG};
+\node[msg] (m2) at (-2.5, 1.5) {ACK};
+\node[msg] (m3) at (-4.5, 0.5) {ACK$^2$};
+\node[msg] (m4) at (-2.5, 0.5) {ACK$^3$};
+\node at (-3.5, -0.3) {$\vdots$};
+\node at (-3.5, -0.9) {\color{red}\footnotesize ``Last message'' problem};
+
+\draw[arrow] (m1) -- (m2);
+\draw[arrow] (m2) -- (m3);
+\draw[arrow] (m3) -- (m4);
+\draw[arrow, dashed, red] (m4) -- ++(0, -0.6);
+
+% Knot (right side)
+\node at (3, 2.5) {\textbf{TGP: Cryptographic Knot}};
+\node[msg, fill=red!20] (ta) at (1.8, 1.2) {$T_A$};
+\node[msg, fill=red!20] (tb) at (4.2, 1.2) {$T_B$};
+\node[msg, fill=orange!20] (da) at (1.8, 0) {$D_A$};
+\node[msg, fill=orange!20] (db) at (4.2, 0) {$D_B$};
+
+\draw[arrow, <->, ultra thick, red] (ta) -- (tb) node[midway, above, font=\footnotesize] {bilateral};
+\draw[arrow] (da) -- (ta);
+\draw[arrow] (db) -- (ta);
+\draw[arrow] (da) -- (tb);
+\draw[arrow] (db) -- (tb);
+\node at (3, -0.9) {\color{green!60!black}\footnotesize Attack key emerges when both have T};
+\end{tikzpicture}
+\caption{Traditional acknowledgment chains suffer from the ``last message'' problem---any message could be lost. The TGP cryptographic knot eliminates this: $T_A$ embeds $D_B$; $T_B$ embeds $D_A$. The attack key \emph{emerges} when both parties have exchanged triple proofs.}
+\label{fig:chain-vs-knot}
+\end{figure}
+
+\paragraph{Core Claim.} TGP achieves symmetric outcomes under \textbf{all} adversary conditions:
+\[
+\forall \text{ adversary behavior}: \text{outcome} \in \{\text{CoordinatedAttack}, \text{CoordinatedAbort}\}
+\]
+Never asymmetric. Gray said symmetric outcomes are impossible; we prove they are guaranteed.
+
+\paragraph{Contributions.}
+\begin{enumerate}
+    \item A three-phase, six-packet protocol achieving deterministic coordination over lossy channels (\S\ref{sec:protocol})
+    \item The \emph{attack key} as emergent state---not a decision, but a mathematical fact (\S\ref{sec:emergence})
+    \item \textbf{186+ theorems} in Lean 4 with zero \texttt{sorry} statements---including exhaustive 256-case bilateral determination, Gray's closure failure via concrete witness, and trust boundary verification (\S\ref{sec:proofs})
+    \item Extension to $n$-party Byzantine consensus in two floods (\S\ref{sec:bft})
+    \item \textbf{7$\times$ latency improvement} over TCP for coordination-heavy workloads (\S\ref{sec:latency})
+    \item \textbf{Lightweight TGP}: An 8-bit safety primitive with independently verified crash safety proofs for DO-178C DAL-A certification (\S\ref{sec:safety-critical})
+    \item Reference implementation with empirical validation (\S\ref{sec:evaluation})
+\end{enumerate}

@@ -1,0 +1,20 @@
+% Chapter 13: Related Work
+% Two Generals Protocol Paper
+
+\paragraph{Common Knowledge Theory.}
+Halpern and Moses~\cite{halpern1990knowledge} formalized the epistemic requirements for coordination, proving that common knowledge requires simultaneous events. Their seminal result showed that achieving common knowledge over asynchronous systems is equivalent to having simultaneous access to perfect information. Our work sidesteps this impossibility by achieving \emph{coordinated action} through bilateral cryptographic construction rather than attempting to establish common knowledge per se. The key insight is that the \emph{existence} of a cryptographic proof artifact can guarantee properties without requiring explicit acknowledgment chains.
+
+\paragraph{The Coordinated Attack Problem.}
+The original Two Generals Problem was formulated by Akkoyunlu et al.~\cite{akkoyunlu1975some} and formalized by Gray~\cite{gray1978notes}. Gray's impossibility proof relies on the ``last message'' argument: in any finite protocol, some message could be the last, and its loss creates asymmetry. We show this argument \textbf{does not apply} to TGP: there is no message whose removal produces asymmetric outcomes (Theorem~\ref{thm:nolast}). Furthermore, we argue that Gray's model, if interpreted to include permanently-silent channels, describes a degenerate case---not the intended ``unreliable channel'' of the generals story (Proposition~\ref{prop:nondegen}). In the physically meaningful interpretation (fair-lossy), TGP achieves symmetric coordinated attack with an epistemic fixpoint, directly contradicting the folk theorem that ``the Two Generals Problem is unsolvable.''
+
+\paragraph{Byzantine Fault Tolerance.}
+The Byzantine Generals Problem~\cite{lamport1982byzantine} generalizes coordination to $n$ parties with $f$ Byzantine faults. PBFT~\cite{castro1999practical} provides practical $O(n^2)$ message complexity with three-phase commit. HotStuff~\cite{yin2019hotstuff} achieves $O(n)$ complexity through linear view-change and pipelining. Tendermint~\cite{buchman2016tendermint} combines PBFT with Proof-of-Stake for blockchain consensus. Our BFT extension achieves $O(n)$ flooding complexity without leader rotation, view-change protocols, or the need for synchronized clocks.
+
+\paragraph{Asynchronous Consensus.}
+The FLP impossibility result~\cite{fischer1985impossibility} proves that deterministic consensus is impossible in asynchronous systems with even one faulty process. Subsequent work introduced randomization~\cite{benor1983another} or partial synchrony~\cite{dwork1988consensus} to circumvent FLP. Bracha's reliable broadcast~\cite{bracha1987asynchronous} provides building blocks for asynchronous BFT. HoneyBadger~\cite{miller2016honey} achieves optimal asynchronous BFT using threshold encryption. Our protocol operates in the fair-lossy model, which is weaker than reliable delivery but sufficient for practical systems.
+
+\paragraph{Threshold Cryptography.}
+BLS signatures~\cite{boneh2001short} enable compact threshold aggregation where $t$ of $n$ partial signatures combine into a single signature. FROST~\cite{komlo2020frost} provides round-optimal Schnorr threshold signatures. Our BFT extension leverages threshold cryptography to achieve compact proofs that attest to committee agreement without revealing individual votes.
+
+\paragraph{Blockchain Consensus.}
+Modern blockchain systems~\cite{cachin2016blockchain} face similar coordination challenges. Our work provides a theoretical foundation for understanding when and why these systems achieve safety despite network unreliability. The flooding-based approach in TGP resembles gossip protocols used in blockchain systems, but with formal guarantees based on bilateral construction.

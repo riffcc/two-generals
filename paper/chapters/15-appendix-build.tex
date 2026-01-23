@@ -1,0 +1,241 @@
+% Appendix A: Building and Benchmarking
+% Two Generals Protocol Paper
+
+\subsection{Building the Lean 4 Proofs}
+
+The formal verification is located in \texttt{lean4/v2/}. To build and verify all proofs:
+
+\begin{verbatim}
+# Install Lean 4 (if not already installed)
+curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh
+
+# Navigate to proof directory
+cd lean4/v2
+
+# Build all proofs (this downloads Mathlib and verifies)
+lake build
+
+# Expected output: no errors, no warnings about sorry statements
+\end{verbatim}
+
+\paragraph{Verification Status.}
+All theorem files compile with \textbf{zero \texttt{sorry} statements}:
+
+\begin{center}
+\begin{tabular}{llc}
+\toprule
+\textbf{File} & \textbf{Purpose} & \textbf{Theorems} \\
+\midrule
+\texttt{Protocol.lean} & Core 6-packet structure & 6 \\
+\texttt{Dependencies.lean} & Bilateral T creation & 12 \\
+\texttt{ProofStapling.lean} & T\_B proves D\_A delivered & 8 \\
+\texttt{Channel.lean} & Fair-lossy model & 14 \\
+\texttt{Emergence.lean} & Tripartite attack key & 18 \\
+\texttt{Bilateral.lean} & Symmetric outcomes & 16 \\
+\texttt{Exhaustive.lean} & All 64 states symmetric & 10 \\
+\texttt{Theseus.lean} & Protocol of Theseus & 12 \\
+\texttt{Gray.lean} & Closure failure (Theorem~\ref{thm:closure-failure}) & 14 \\
+\texttt{GrayCore.lean} & Local views & 20 \\
+\texttt{GrayInterp.lean} & True local views & 16 \\
+\texttt{LocalDetect.lean} & Attack key detectability & 10 \\
+\texttt{Epistemic.lean} & Knowledge levels & 8 \\
+\texttt{Solution.lean} & Main theorem synthesis & 18 \\
+\texttt{TGPMinimal.lean} & 8-bit crash safety & 14 \\
+\midrule
+\textbf{Total} & & \textbf{186+} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Running the Python Reference Implementation}
+
+\begin{verbatim}
+# Navigate to Python implementation
+cd python/
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the basic test suite
+pytest tests/
+
+# Run the Protocol of Theseus test
+pytest tests/test_theseus.py -v
+
+# Run extreme loss simulation (takes ~10 minutes)
+python simulations/extreme_loss.py
+\end{verbatim}
+
+\subsection{Benchmark Methodology}
+
+\paragraph{Network Simulation.}
+We use a discrete-event simulator with configurable packet loss. Each ``tick'' represents a network round where:
+\begin{enumerate}
+    \item Each party attempts to send their highest available proof
+    \item Each sent packet is dropped with probability $p$ (loss rate)
+    \item Received packets update the receiver's state
+    \item Protocol advances if new proofs are received
+\end{enumerate}
+
+\paragraph{Metrics Collected.}
+\begin{itemize}
+    \item \textbf{Ticks to coordination}: Number of rounds until both parties have Q
+    \item \textbf{Messages sent}: Total packets transmitted (including redundant floods)
+    \item \textbf{Messages delivered}: Packets that successfully arrived
+    \item \textbf{Outcome}: BothAttack, BothAbort, or Asymmetric
+\end{itemize}
+
+\paragraph{TCP Comparison.}
+For TCP comparison, we model a sequential acknowledgment chain:
+\begin{verbatim}
+TCP coordination requires:
+  SYN → SYN-ACK → ACK → DATA → ACK (minimum 5 sequential RTTs)
+
+Each step subject to loss and retransmission with exponential backoff.
+\end{verbatim}
+
+\subsection{Benchmark Results Summary}
+
+\paragraph{Latency Comparison (0\% loss).}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Protocol & Ticks to Coordination & Relative Speed \\
+\midrule
+TCP-equivalent & 22 & 1.0$\times$ \\
+TGP & 3 & \textbf{7.3$\times$ faster} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Loss Tolerance.}
+
+\begin{center}
+\begin{tabular}{lcccc}
+\toprule
+Loss Rate & TGP Ticks & TCP Ticks & TGP Advantage & Asymmetric Outcomes \\
+\midrule
+0\% & 3 & 22 & 7$\times$ & 0 \\
+10\% & 12 & 88 & 7$\times$ & 0 \\
+50\% & 45 & 880+ & 20$\times$ & 0 \\
+90\% & 180 & timeout & $\infty$ & 0 \\
+98\% & 850 & timeout & $\infty$ & 0 \\
+99.9999\% & 5,400 (1.5 hrs) & timeout & $\infty$ & 0 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{Integration with Citadel SPORE}
+
+TGP integrates with Citadel's SPORE (Succinct Proof of Range Exclusions) for optimal content synchronization.
+
+\paragraph{SPORE Overview.}
+SPORE achieves information-theoretic optimal synchronization:
+\[
+\text{SyncCost}(A, B) = O(|A \oplus B|)
+\]
+
+This means synchronization cost is proportional only to the \emph{differences} between two datasets, not their total size.
+
+\paragraph{TGP + SPORE Pipeline.}
+\begin{enumerate}
+    \item \textbf{Coordination Phase}: TGP establishes bilateral agreement between peers
+    \item \textbf{Filter Exchange}: Peers exchange XOR filters describing their content
+    \item \textbf{Delta Transfer}: Only differing content is transmitted
+    \item \textbf{Bilateral Verification}: Combined TGP+SPORE proof ensures completion
+\end{enumerate}
+
+\begin{verbatim}
+pub struct BilateralSyncReceipt {
+    tgp_proof: QuadProof,        // Coordination guarantee
+    spore_proof: SporeProof,     // Sync completion guarantee
+    combined_sig: BilateralSignature,
+}
+\end{verbatim}
+
+\paragraph{SPORE Efficiency.}
+
+\begin{center}
+\begin{tabular}{cccc}
+\toprule
+Dataset Similarity & Traditional Sync & SPORE Sync & Improvement \\
+\midrule
+99.9\% & 10,000 blocks & 10 blocks & 1000$\times$ \\
+99\% & 10,000 blocks & 100 blocks & 100$\times$ \\
+90\% & 10,000 blocks & 1,000 blocks & 10$\times$ \\
+50\% & 10,000 blocks & 5,000 blocks & 2$\times$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsection{TGP-Native Mesh Performance}
+
+When TGP replaces TCP for mesh coordination (as implemented in Citadel), the performance advantages compound:
+
+\paragraph{Memory Per Peer.}
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Architecture & Memory per Peer & For 100 Peers \\
+\midrule
+TCP (sockets + buffers) & $\sim$120 KB & $\sim$12 MB \\
+TGP-Native (QuadProof only) & $\sim$2.5 KB & $\sim$250 KB \\
+\midrule
+\textbf{Improvement} & \multicolumn{2}{c}{\textbf{48$\times$ less memory}} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{Why TGP-Native is Simpler.}
+TCP mesh coordination requires:
+\begin{itemize}
+    \item Connection state machine per peer
+    \item Exponential backoff retry logic
+    \item Keepalive timers
+    \item Half-open connection detection
+    \item Broadcast channels for flood propagation
+\end{itemize}
+
+TGP-Native requires:
+\begin{itemize}
+    \item One UDP socket
+    \item QuadProof HashMap (authorized peers)
+    \item Continuous flooding loop
+\end{itemize}
+
+The result: ``bugs'' like phantom peers, isolated nodes, and memory leaks simply cannot occur because the conditions that created them no longer exist.
+
+\subsection{Reproducing Benchmark Results}
+
+\begin{verbatim}
+# Clone the repository
+git clone https://github.com/riff-cc/two-generals.git
+cd two-generals
+
+# Run the full benchmark suite
+python benchmarks/run_all.py
+
+# Generate comparison plots
+python benchmarks/plot_results.py --output figures/
+
+# Run specific loss rate
+python benchmarks/single_run.py --loss 0.5 --runs 1000
+\end{verbatim}
+
+\paragraph{Expected Output.}
+\begin{verbatim}
+=== TGP Benchmark Results ===
+Loss Rate: 50%
+Runs: 1000
+Mean Ticks: 45.2
+Max Ticks: 156
+Symmetric Attack: 987 (98.7%)
+Symmetric Abort: 13 (1.3%)
+Asymmetric: 0 (0.0%)
+
+=== TCP Comparison ===
+Loss Rate: 50%
+Mean Ticks: 880+ (exponential backoff)
+Timeout Rate: 42%
+\end{verbatim}

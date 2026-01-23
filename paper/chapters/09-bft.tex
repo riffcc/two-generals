@@ -1,0 +1,39 @@
+% Chapter 9: Byzantine Fault Tolerance Extension
+% Two Generals Protocol Paper
+
+The bilateral construction insight extends to $n$-party consensus with Byzantine fault tolerance.
+
+\subsection{System Parameters}
+
+\begin{itemize}
+    \item Total nodes: $n = 3f + 1$
+    \item Byzantine faults tolerated: $f$
+    \item Threshold: $T = 2f + 1$
+\end{itemize}
+
+\subsection{Protocol Outline}
+
+\begin{enumerate}
+    \item \textbf{PROPOSE:} Any node floods proposal $\langle V, R \rangle$
+    \item \textbf{SHARE:} Each node creates and floods partial signature share
+    \item \textbf{COMMIT:} Any node with $\geq T$ shares aggregates threshold signature
+\end{enumerate}
+
+\subsection{Safety Guarantee}
+
+Any valid COMMIT requires $\geq 2f+1$ honest shares. Two conflicting values would require $\geq 2(2f+1) = 4f+2$ shares, but only $3f+1$ nodes exist. \textbf{Impossible.}
+
+\subsection{Comparison with PBFT}
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Property & PBFT~\cite{castro1999practical} & TGP-BFT \\
+\midrule
+Message complexity & $O(n^2)$ & $O(n)$ flooding \\
+Leader required & Yes & No \\
+View change & Complex & None \\
+Rounds to commit & 3 & 2 \\
+\bottomrule
+\end{tabular}
+\end{center}

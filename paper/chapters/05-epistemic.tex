@@ -1,0 +1,162 @@
+% Chapter 5: The Epistemic Fixpoint
+% Two Generals Protocol Paper (v2)
+
+The bilateral construction property achieves something remarkable: a finite cryptographic structure that encodes sufficient epistemic depth for coordination. This section provides formal epistemic logic treatment of why TGP resolves Gray's impossibility.
+
+\subsection{Epistemic Logic Background}
+
+Following Fagin et al.~\cite{fagin1995reasoning} and Halpern-Moses~\cite{halpern1990knowledge}, we use standard modal logic notation:
+
+\begin{itemize}
+    \item $\Know{X}{\phi}$: ``Party $X$ knows $\phi$''
+    \item $\Know{A}{\Know{B}{\phi}}$: ``$A$ knows that $B$ knows $\phi$''
+    \item $C(\phi)$: Common knowledge of $\phi$ --- the infinite conjunction:
+    \[
+    C(\phi) \equiv \phi \land \Know{A}{\phi} \land \Know{B}{\phi} \land \Know{A}{\Know{B}{\phi}} \land \Know{B}{\Know{A}{\phi}} \land \cdots
+    \]
+\end{itemize}
+
+\subsection{Gray's Impossibility Restated}
+
+Gray~\cite{gray1978notes} and Halpern-Moses~\cite{halpern1990knowledge} proved:
+
+\begin{theorem}[Common Knowledge Impossibility --- Gray/Halpern-Moses]
+In any system where communication is not guaranteed, common knowledge of any fact cannot be achieved through finite message sequences.
+\end{theorem}
+
+The proof relies on the observation that each epistemic level requires explicit acknowledgment:
+\begin{center}
+$\Know{A}{\phi} \Rightarrow$ message delivered $\Rightarrow$
+$\Know{B}{\Know{A}{\phi}} \Rightarrow$ ACK delivered $\Rightarrow \cdots$
+\end{center}
+
+Any message in this chain could be ``the last'' that fails, preventing the next level from being established.
+
+\subsection{The Paradigm Shift: Construction vs Communication}
+
+Our resolution rests on a fundamental reframing:
+
+\begin{center}
+\fbox{
+\begin{minipage}{0.85\columnwidth}
+\textbf{Gray's Model:} Knowledge is \emph{transferred} via message exchange.\\[0.5em]
+\textbf{Our Model:} Knowledge is \emph{embedded} in cryptographic structure.
+\end{minipage}
+}
+\end{center}
+
+The artifact $\Triple{A}$ does not \emph{communicate} that Alice knows Bob knows---its \emph{existence proves} that Alice has Bob's $\Double{B}$, which proves Bob had Alice's $\Com{A}$, which proves the mutual knowledge chain terminates.
+
+\subsection{Formal Definition: Epistemic Fixpoint}
+
+\begin{definition}[Epistemic Fixpoint]
+\label{def:fixpoint}
+A protocol achieves an \emph{epistemic fixpoint} if there exists an artifact where construction by one party guarantees constructibility by the counterparty:
+\[
+\mathsf{constructed}(\Triple{A}) \Rightarrow \mathsf{constructible}(\Triple{B})
+\]
+\end{definition}
+
+\begin{theorem}[TGP Achieves Epistemic Fixpoint]
+\label{thm:fixpoint}
+The triple proof pair $(\Triple{A}, \Triple{B})$ satisfies Definition~\ref{def:fixpoint}:
+\[
+\exists \Triple{A} \Leftrightarrow \exists \Triple{B} \text{ (under fair-lossy)}
+\]
+\end{theorem}
+
+\begin{proof}
+Suppose $\Triple{A}$ exists. By construction:
+\begin{align*}
+\Triple{A} &= \Sign{A}{\Double{A} \| \Double{B}} \\
+\Double{B} &= \Sign{B}{\Com{B} \| \Com{A}} \subseteq \Triple{A}
+\end{align*}
+
+Therefore Alice possesses $\Double{B}$, which proves:
+\begin{enumerate}
+    \item Bob constructed $\Double{B}$ (signature verification)
+    \item Bob had $\Com{A}$ when constructing $\Double{B}$ (embedded in $\Double{B}$)
+    \item Bob can construct $\Triple{B}$ once he receives $\Double{A}$
+\end{enumerate}
+
+Since Alice floods $\Double{A}$, and the channel is fair-lossy:
+\begin{itemize}
+    \item Bob will receive $\Double{A}$ with probability 1
+    \item Bob can construct $\Triple{B}$
+\end{itemize}
+
+Thus: $\Triple{A} \Rightarrow \mathsf{constructible}(\Triple{B})$
+
+By symmetric argument: $\Triple{B} \Rightarrow \mathsf{constructible}(\Triple{A})$
+
+The mutual implication creates the fixpoint:
+\[
+\Triple{A} \Leftrightarrow \Triple{B} \text{ (under fair-lossy)}
+\]
+
+This is not an infinite regress---it is a \textbf{self-referential cryptographic entanglement} where each half proves the other's constructibility through its own structure.
+\end{proof}
+
+\subsection{Why Cryptography Resolves the Impossibility}
+
+The key insight is that \textbf{cryptographic signatures create unforgeable proofs of prior possession}.
+
+When Alice signs $\Triple{A}$ over $\Double{B}$, she produces permanent, verifiable evidence that she possessed $\Double{B}$ at signing time. This evidence is \emph{self-certifying}---no additional messages needed.
+
+\begin{proposition}[Self-Certification]
+Each proof level in TGP is self-certifying: verifying the signature on $\Triple{X}$ simultaneously proves:
+\begin{enumerate}
+    \item $X$ created $\Triple{X}$ (signature validity)
+    \item $X$ possessed $\Double{X}$ and $\Double{Y}$ (embedded in $\Triple{X}$)
+    \item $X$ possessed all four commitments (embedded in the doubles)
+\end{enumerate}
+\end{proposition}
+
+This transforms the problem from ``How do I know you received my message?'' to ``What does your cryptographic artifact prove you possessed?''
+
+\subsection{The Epistemic Depth Table}
+
+\begin{center}
+\begin{tabular}{lcll}
+\toprule
+\textbf{Level} & \textbf{Depth} & \textbf{Artifact} & \textbf{Epistemic Content} \\
+\midrule
+Commitment & 0 & $\Com{X}$ & ``I intend to attack'' \\
+Double & 1 & $\Double{X}$ & $\Know{X}{\Com{Y}}$ \\
+Triple & 2+ & $\Triple{X}$ & $\Know{X}{\Know{Y}{\Com{X}}}$ + bilateral \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The triple level achieves sufficient epistemic depth because the bilateral construction property creates a closed loop: if Alice can construct $\Triple{A}$, Bob can construct $\Triple{B}$, and vice versa. The attack key \emph{emerges} from this bilateral state.
+
+\subsection{The Elevator, Not the Ladder}
+
+A clarifying metaphor for the paradigm shift:
+
+\begin{center}
+\fbox{
+\begin{minipage}{0.85\columnwidth}
+\textbf{Gray's Model:} To reach epistemic level $n$, you must climb $n$ rungs, each requiring a separate message.\\[0.5em]
+\textbf{TGP's Model:} The triple proofs form a \emph{knot} that reaches sufficient depth in three phases.
+\end{minipage}
+}
+\end{center}
+
+The epistemic ladder is still infinitely tall in \emph{theory}. But TGP does not need to reach the top---it only needs sufficient epistemic depth for the attack key to emerge with bilateral guarantees. Three levels suffice.
+
+\subsection{Cryptography as Epistemic Machinery}
+
+A potential objection: ``You've enriched Gray's model with cryptography---doesn't that invalidate the comparison?''
+
+We reject this framing. Cryptography is \emph{not} an oracle or black box external to the model. From the perspective of distributed systems theory:
+
+\begin{itemize}
+    \item A ``signature'' is just a deterministic function: $\mathsf{sign} : (\mathsf{sk}, m) \mapsto \sigma$
+    \item Verification is another function: $\mathsf{verify} : (\mathsf{pk}, m, \sigma) \mapsto \{true, false\}$
+    \item No magic oracles, no shared randomness, no out-of-band coordination
+\end{itemize}
+
+TGP is \textbf{still just deterministic state machines passing finite-length bitstrings over lossy channels}---exactly the class of systems Gray's theorem was intended to cover. We have not changed the system class; we have enriched the local transition function in a way Gray's proof implicitly excluded.
+
+If their theorem was meant to cover \emph{all} message-passing protocols on unreliable channels, including crypto-enhanced ones, TGP is a counterexample. If their theorem was intended only for protocols without structured cryptographic introspection, then ``the Coordinated Attack Problem is impossible'' was always an overstatement of the actual result.

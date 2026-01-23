@@ -1,0 +1,133 @@
+% Chapter 3: The Two Generals Protocol
+% Two Generals Protocol Paper (v2)
+
+\subsection{Protocol Overview}
+
+The protocol proceeds through three phases, constructing increasingly nested cryptographic proofs:
+
+\begin{enumerate}
+    \item \textbf{Commitment} ($\Com{X}$): Each party signs their intent
+    \item \textbf{Double Proof} ($\Double{X}$): Each party signs both commitments
+    \item \textbf{Triple Proof} ($\Triple{X}$): Each party signs both double proofs---the \emph{knot}
+\end{enumerate}
+
+The \emph{attack key} emerges when both parties hold the knot.
+
+\subsection{Phase Definitions}
+
+\begin{definition}[Commitment]
+\[\Com{X} = \Sign{X}{\text{``I will attack at dawn if you agree''}}\]
+\end{definition}
+
+\begin{definition}[Double Proof]
+\[\Double{X} = \Sign{X}{\Com{X} \| \Com{Y} \| \text{``Both committed''}}\]
+\end{definition}
+
+\begin{definition}[Triple Proof]
+\[\Triple{X} = \Sign{X}{\Double{X} \| \Double{Y} \| \text{``Both have double proofs''}}\]
+\end{definition}
+
+Figure~\ref{fig:protocol-phases} illustrates the three phases and their message flows.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    scale=0.9,
+    party/.style={draw, thick, minimum width=1.5cm, minimum height=0.8cm, rounded corners},
+    phase/.style={draw, thick, minimum width=2.5cm, minimum height=0.6cm, fill=#1!20},
+    arrow/.style={-{Stealth[length=2mm]}, thick, #1}
+]
+% Timeline
+\draw[thick, ->] (-0.5, 0) -- (-0.5, -6.5) node[below] {time};
+
+% Parties
+\node[party, fill=green!30] (alice) at (2, 0.8) {Alice};
+\node[party, fill=blue!30] (bob) at (7, 0.8) {Bob};
+
+% Vertical lines for parties
+\draw[thick, dashed, green!60] (2, 0.3) -- (2, -6);
+\draw[thick, dashed, blue!60] (7, 0.3) -- (7, -6);
+
+% Phase 1: Commitments
+\node[phase=yellow] at (-2, -1) {Phase 1};
+\node[fill=yellow!30, draw, rounded corners, font=\small] (ca) at (2, -1) {$C_A$};
+\node[fill=yellow!30, draw, rounded corners, font=\small] (cb) at (7, -1) {$C_B$};
+\draw[arrow=green!60!black, decorate, decoration={snake, amplitude=1mm, segment length=4mm}] (ca) -- (cb) node[midway, above, font=\footnotesize] {flood};
+\draw[arrow=blue!60!black, decorate, decoration={snake, amplitude=1mm, segment length=4mm}] (cb) -- (ca);
+
+% Phase 2: Double Proofs
+\node[phase=orange] at (-2, -2.5) {Phase 2};
+\node[fill=orange!30, draw, rounded corners, font=\small] (da) at (2, -2.5) {$D_A$};
+\node[fill=orange!30, draw, rounded corners, font=\small] (db) at (7, -2.5) {$D_B$};
+\draw[arrow=green!60!black] (da) -- (db);
+\draw[arrow=blue!60!black] (db) -- (da);
+\node[font=\tiny, right] at (4.5, -2.8) {contains $C_A, C_B$};
+
+% Phase 3: Triple Proofs (THE KNOT)
+\node[phase=red] at (-2, -4) {Phase 3};
+\node[fill=red!30, draw, rounded corners, font=\small] (ta) at (2, -4) {$T_A$};
+\node[fill=red!30, draw, rounded corners, font=\small] (tb) at (7, -4) {$T_B$};
+\draw[arrow=green!60!black] (ta) -- (tb);
+\draw[arrow=blue!60!black] (tb) -- (ta);
+\node[font=\tiny, right] at (4.5, -4.3) {contains $D_A, D_B$ --- THE KNOT};
+
+% Attack Key Emergence
+\node[draw, thick, fill=purple!30, rounded corners, minimum width=3cm] at (4.5, -5.5) {\textbf{Attack Key Emerges}};
+\draw[thick, ->] (2, -4.5) -- (2, -5.2) -- (3.5, -5.5);
+\draw[thick, ->] (7, -4.5) -- (7, -5.2) -- (5.5, -5.5);
+
+% Epistemic depth labels
+\node[font=\scriptsize, gray] at (9.2, -1) {unilateral};
+\node[font=\scriptsize, gray] at (9.2, -2.5) {bilateral (C)};
+\node[font=\scriptsize, gray] at (9.2, -4) {bilateral (D)};
+
+\end{tikzpicture}
+\caption{The three phases of TGP. Each phase produces a proof level with increasing epistemic depth. The attack key \emph{emerges} when both parties have exchanged triple proofs.}
+\label{fig:protocol-phases}
+\end{figure}
+
+\subsection{Protocol Behavior}
+
+\begin{algorithm}[t]
+\caption{Two Generals Protocol (Party $X$)}
+\label{alg:tgp}
+\begin{algorithmic}[1]
+\State Generate keypair, create $\Com{X}$
+\State \textbf{flood} $\Com{X}$ continuously
+\State
+\Upon{ receive $\Com{Y}$}
+    \State Construct $\Double{X} = \Sign{X}{\Com{X} \| \Com{Y}}$
+    \State \textbf{flood} $\Double{X}$ continuously
+\EndUpon
+\State
+\Upon{ receive $\Double{Y}$}
+    \State Construct $\Triple{X} = \Sign{X}{\Double{X} \| \Double{Y}}$
+    \State \textbf{flood} $\Triple{X}$ continuously
+\EndUpon
+\State
+\Upon{ receive $\Triple{Y}$}
+    \State \textbf{Attack key emerges} --- both parties can now ATTACK
+    \Comment{No message needed; emergence is a fact}
+\EndUpon
+\State
+\Upon{ deadline expires without $\Triple{Y}$}
+    \State \textbf{Abort} --- attack key cannot exist
+\EndUpon
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{The Attack Key}
+
+The attack key is not a message. It is an \emph{emergent state}---a mathematical fact about whether sufficient information exists for both parties to coordinate.
+
+\begin{definition}[Attack Key Existence]
+The attack key exists if and only if:
+\begin{itemize}
+    \item Both parties have $\Double{A}$ and $\Double{B}$ (virtual artifact $V$ emerges)
+    \item Alice can respond (has $V$ and $\Double{B}$)
+    \item Bob can respond (has $V$ and $\Double{A}$)
+\end{itemize}
+\end{definition}
+
+The key insight: $\Triple{B}$ \emph{embeds} $\Double{A}$. So when Alice receives $\Triple{B}$, she knows Bob had $\Double{A}$. By the bilateral construction property, if Bob could construct $\Triple{B}$, then Alice can construct $\Triple{A}$, and the attack key exists for \emph{both} parties.
+

@@ -1,0 +1,99 @@
+% Chapter 2: System Model and Definitions
+% Two Generals Protocol Paper
+
+\subsection{Network Model}
+
+We consider two parties, Alice ($A$) and Bob ($B$), communicating over a channel. The key contribution of this work is identifying the \emph{precise boundary} between possible and impossible coordination by formalizing a hierarchy of channel models.
+
+\subsubsection{The Channel Hierarchy}
+
+We define five channel classes, ordered from weakest to strongest guarantees:
+
+\begin{center}
+\begin{tabular}{llp{5.5cm}}
+\toprule
+\textbf{Model} & \textbf{Adversary Power} & \textbf{Real-World Analog} \\
+\midrule
+No Channel & Total isolation & Physically impossible to communicate \\
+Unreliable & Can drop ALL messages forever & Gray's model (worst-case) \\
+Real-Unreliable & High loss but not permanent 100\% & Satellite, mobile, hostile RF \\
+Fair-Lossy & Cannot block infinite flooding & TCP/IP, any engineered network \\
+Reliable & All messages delivered & Idealized model \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{definition}[Unreliable Channel (Gray's Model)]
+A channel is \emph{unreliable} if the adversary has unbounded power: for any message $m$ and any number of copies $n$, the adversary may drop all $n$ copies forever. This includes permanent total loss as a valid adversary strategy.
+\end{definition}
+
+\begin{definition}[Fair-Lossy Channel]
+\label{def:fairlossy}
+A channel is \emph{fair-lossy} if for any message type flooded continuously, the adversary cannot block all copies. Formally, if party $X$ floods message $m$, then at least one copy is eventually delivered:
+\[
+\textsf{Flooding}(m) \Rightarrow \exists k.\, \textsf{Delivered}(m, k)
+\]
+\end{definition}
+
+\begin{proposition}[Strict Inclusion]
+\label{prop:strict}
+Fair-lossy $\subsetneq$ Unreliable. Every fair-lossy adversary is an unreliable adversary, but not conversely. The ``drop everything forever'' adversary is unreliable but not fair-lossy.
+\end{proposition}
+
+\subsubsection{TGP's Core Guarantee}
+
+\begin{theorem}[Universal Symmetry]
+\label{thm:universal-symmetry}
+TGP achieves symmetric outcomes under \textbf{all} adversary conditions:
+\[
+\forall \text{ adversary}: \text{outcome} \in \{\text{CoordinatedAttack}, \text{CoordinatedAbort}\}
+\]
+\end{theorem}
+
+This includes NoChannel (total message loss)---both parties abort symmetrically. The channel model affects \emph{which} symmetric outcome occurs, not \emph{whether} outcomes are symmetric:
+
+\begin{center}
+\begin{tabular}{lc}
+\toprule
+\textbf{Adversary Behavior} & \textbf{TGP Outcome} \\
+\midrule
+NoChannel (total loss) & CoordinatedAbort \\
+Partial delivery & CoordinatedAbort \\
+Asymmetric channel & CoordinatedAbort \\
+Fair-lossy (flooding succeeds) & CoordinatedAttack \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection{Gray's Hidden Assumption}
+
+Gray's impossibility proof assumes \emph{closure under message removal}: removing a delivered message from a valid execution produces another valid execution. This holds for unreliable channels but \textbf{fails} for fair-lossy channels.
+
+Under fair-lossy semantics, if a message is creatable and flooded, it \emph{will} be delivered. Removing it post-hoc violates the fair-lossy property. TGP exploits this: the bilateral construction creates artifacts whose removal would violate the channel semantics that permitted their creation.
+
+\begin{theorem}[Closure Failure]
+\label{thm:closure-failure}
+Fair-lossy channels are not closed under single-message removal. The proof constructs a concrete witness: a schedule where removing $T_B$ leaves prerequisites intact (so $T_B$ is still creatable) but $T_B$ is absent (violating fair-lossy).
+\end{theorem}
+
+This is proven in Lean 4 as \texttt{fair\_lossy\_not\_closed\_under\_removal}.
+
+\subsection{Cryptographic Primitives}
+
+We assume a standard cryptographic signature scheme with the following properties:
+\begin{itemize}
+    \item $\Sign{X}{m}$: Party $X$'s signature over message $m$
+    \item $\Verify{X}{m}{\sigma}$: Verification that $\sigma$ is $X$'s valid signature on $m$
+    \item \textbf{Unforgeability}: Without $X$'s private key, producing a valid $\Sign{X}{m}$ is computationally infeasible
+\end{itemize}
+
+In practice, we use Ed25519~\cite{ed25519} for its security and efficiency.
+
+\subsection{Protocol Goals}
+
+A coordination protocol satisfies:
+\begin{description}
+    \item[Safety:] No execution results in asymmetric decisions---both parties decide $\Attack$ or both decide $\Abort$
+    \item[Liveness:] Under fair-lossy conditions, both parties eventually reach a decision
+    \item[Validity:] If both parties initially intend to attack, and the network is fair-lossy, both decide $\Attack$
+\end{description}
