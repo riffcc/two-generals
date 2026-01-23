@@ -1,0 +1,88 @@
+# Two Generals Protocol (TGP) - Formal Verification in Lean 4
+# A deterministically failsafe solution to the Coordinated Attack Problem
+# Author: Wings@riff.cc (Riff Labs)
+# Date: January 2026
+
+name = "tgp"
+version = "2.0.0"
+defaultTargets = ["TGP"]
+keywords = ["distributed-systems", "formal-verification", "consensus", "two-generals"]
+license = "AGPL-3.0"
+
+# Require Lean 4 toolchain
+[leanOptions]
+# No sorry statements allowed in production
+pp.all = false
+
+# Mathlib (batteries inherited from mathlib)
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "v4.26.0-rc2"
+
+[[lean_lib]]
+name = "Protocol"
+srcDir = "."
+
+[[lean_lib]]
+name = "Dependencies"
+srcDir = "."
+
+[[lean_lib]]
+name = "ProofStapling"
+srcDir = "."
+
+[[lean_lib]]
+name = "Channel"
+srcDir = "."
+
+[[lean_lib]]
+name = "Emergence"
+srcDir = "."
+
+[[lean_lib]]
+name = "Bilateral"
+srcDir = "."
+
+[[lean_lib]]
+name = "Exhaustive"
+srcDir = "."
+
+[[lean_lib]]
+name = "Theseus"
+srcDir = "."
+
+[[lean_lib]]
+name = "Gray"
+srcDir = "."
+
+[[lean_lib]]
+name = "GrayCore"
+srcDir = "."
+
+[[lean_lib]]
+name = "GrayInterp"
+srcDir = "."
+
+[[lean_lib]]
+name = "LocalDetect"
+srcDir = "."
+
+[[lean_lib]]
+name = "Epistemic"
+srcDir = "."
+
+[[lean_lib]]
+name = "Solution"
+srcDir = "."
+
+[[lean_lib]]
+name = "TGPMinimal"
+srcDir = "."
+
+[[lean_lib]]
+name = "TGP"
+srcDir = "."
+globs = ["Protocol", "Dependencies", "ProofStapling", "Channel", "Emergence",
+         "Bilateral", "Exhaustive", "Theseus", "Gray", "GrayCore", "GrayInterp",
+         "LocalDetect", "Epistemic", "Solution", "TGPMinimal"]
