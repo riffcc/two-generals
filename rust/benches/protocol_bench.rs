@@ -30,40 +30,44 @@ fn benchmark_verification(c: &mut Criterion) {
 
 fn benchmark_protocol_completion(c: &mut Criterion) {
     c.bench_function("protocol_full_run", |b| {
-        b.iter(|| {
-            let alice_keys = KeyPair::generate();
-            let bob_keys = KeyPair::generate();
+        b.iter_batched(
+            || {
+                let alice_keys = KeyPair::generate();
+                let bob_keys = KeyPair::generate();
 
-            let mut alice = TwoGenerals::new(
-                alice_keys.clone(),
-                bob_keys.public_key().clone(),
-                b"attack at dawn",
-            );
-            let mut bob = TwoGenerals::new(
-                bob_keys.clone(),
-                alice_keys.public_key().clone(),
-                b"attack at dawn",
-            );
+                let alice = TwoGenerals::new(
+                    alice_keys.clone(),
+                    bob_keys.public_key().clone(),
+                    b"attack at dawn",
+                );
+                let bob = TwoGenerals::new(
+                    bob_keys.clone(),
+                    alice_keys.public_key().clone(),
+                    b"attack at dawn",
+                );
+            },
+            |(alice, bob): (TwoGenerals, TwoGenerals)| {
+                // Run until both complete
+                for _ in 0..20 {
+                    let alice_msgs = alice.get_messages_to_send();
+                    let bob_msgs = bob.get_messages_to_send();
 
-            // Run until both complete
-            for _ in 0..20 {
-                let alice_msgs = alice.get_messages_to_send();
-                let bob_msgs = bob.get_messages_to_send();
+                    for msg in alice_msgs {
+                        let _ = bob.receive(&msg);
+                    }
+                    for msg in bob_msgs {
+                        let _ = alice.receive(&msg);
+                    }
 
-                for msg in alice_msgs {
-                    let _ = bob.receive(&msg);
+                    if alice.is_complete() && bob.is_complete() {
+                        break;
+                    }
                 }
-                for msg in bob_msgs {
-                    let _ = alice.receive(&msg);
-                }
 
-                if alice.is_complete() && bob.is_complete() {
-                    break;
-                }
-            }
-
-            black_box((alice.can_attack(), bob.can_attack()))
-        })
+                black_box((alice.can_attack(), bob.can_attack()))
+            }, 
+            criterion::BatchSize::SmallInput
+        )
     });
 }
 
