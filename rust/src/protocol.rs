@@ -1,23 +1,31 @@
 //! Two Generals Protocol state machine implementation.
 //!
-//! This module implements the core protocol logic with C → D → T → Q
-//! phase transitions. The protocol achieves deterministic coordination
-//! through epistemic proof escalation.
+//! This module implements the core protocol logic with C → D → T proof
+//! escalation. The protocol achieves deterministic coordination through
+//! bilateral construction properties.
 //!
-//! # Protocol Phases
+//! # 6-Packet Protocol Model
 //!
-//! - **Init**: Initial state, preparing commitment
-//! - **Commitment**: Flooding C_X, waiting for C_Y
-//! - **Double**: Have both commitments, flooding D_X, waiting for D_Y
-//! - **Triple**: Have both doubles, flooding T_X, waiting for T_Y
-//! - **Quad**: Have both triples, flooding Q_X, waiting for Q_Y
-//! - **Complete**: Bilateral receipt pair (Q_A, Q_B) achieved
-//! - **Aborted**: Deadline passed without achieving fixpoint
+//! The current protocol uses 6 packets only:
+//! - C_A, C_B: Commitments (unilateral)
+//! - D_A, D_B: Double proofs (bilateral at C level)
+//! - T_A, T_B: Triple proofs (bilateral at D level) - THE KNOT
+//!
+//! **There is NO Q phase in the core protocol.** Q phases are legacy from
+//! the "Full Solve" variant and are deprecated.
+//!
+//! # Attack Key Emergence
+//!
+//! The attack key is an EMERGENT STATE, not a decision. It EXISTS when:
+//! - Both parties have constructed their triple proofs (T_A and T_B exist)
+//! - Receiving T_Y gives you D_Y embedded inside
+//! - The bilateral construction property guarantees: T_A ↔ T_B
 //!
 //! # Key Insight
 //!
-//! Once Q_X is constructible, Q_Y is also constructible.
-//! This is the bilateral construction property that makes TGP work.
+//! Once T_X is constructible, T_Y is also constructible (via embedding).
+//! Neither can exist without the other being constructible.
+//! This is the bilateral construction property - "The Knot".
 
 #[cfg(feature = "no_std")]
 use alloc::{vec, vec::Vec};
@@ -272,28 +280,54 @@ impl TwoGenerals {
         self.state
     }
 
-    /// Check if the protocol has reached the fixpoint.
+    /// Check if the attack key exists (6-packet model).
+    ///
+    /// The attack key is an EMERGENT STATE. It exists when both parties
+    /// have constructed their triple proofs. This is the fundamental
+    /// completion check for the bilateral construction property.
+    ///
+    /// # The Bilateral Construction Property
+    ///
+    /// ```text
+    /// T_A exists → contains D_B → Bob had D_A → Bob can construct T_B
+    /// T_B exists → contains D_A → Alice had D_B → Alice can construct T_A
+    /// ```
+    ///
+    /// If either triple exists, the other is constructible. The attack
+    /// key emergence is symmetric - both parties can compute it or neither can.
     #[must_use]
-    pub const fn is_complete(&self) -> bool {
-        matches!(self.state, ProtocolState::Complete)
+    pub fn attack_key_exists(&self) -> bool {
+        self.own_triple.is_some() && self.other_triple.is_some()
     }
 
-    /// Check if this party can safely ATTACK (Full Solve).
+    /// Check if the protocol has reached the fixpoint.
     ///
-    /// Requires BOTH Q_CONF_FINAL proofs - our own AND the counterparty's.
-    /// This ensures mutual observation of readiness before committing.
+    /// In the 6-packet model, completion is when the attack key exists
+    /// (both triples are present). Legacy "Full Solve" used Q_CONF_FINAL.
+    #[must_use]
+    pub fn is_complete(&self) -> bool {
+        // 6-packet model: complete when attack key exists
+        self.attack_key_exists()
+    }
+
+    /// Check if this party can safely ATTACK.
+    ///
+    /// In the 6-packet model, can_attack is equivalent to attack_key_exists().
+    /// The attack key IS the authorization - no additional phases needed.
     #[must_use]
     pub fn can_attack(&self) -> bool {
-        self.is_complete() && self.own_quad_conf_final.is_some() && self.other_quad_conf_final.is_some()
+        self.attack_key_exists()
     }
 
     /// Get the final decision.
     #[must_use]
     pub fn get_decision(&self) -> Decision {
-        if self.is_complete() {
+        if self.attack_key_exists() {
             Decision::Attack
-        } else {
+        } else if matches!(self.state, ProtocolState::Aborted) {
             Decision::Abort
+        } else {
+            Decision::Pending
         }
     }
 
@@ -778,8 +812,32 @@ impl TwoGenerals {
         messages
     }
 
-    /// Get the bilateral receipt pair if complete.
+    /// Get the bilateral triple proof pair (6-packet model).
+    ///
+    /// In the 6-packet model, the bilateral receipt is the triple proof pair
+    /// (T_A, T_B). These proofs embed all lower-level proofs and constitute
+    /// "The Knot" - the bilateral construction that proves coordination.
     #[must_use]
+    pub fn get_bilateral_triple(&self) -> Option<(&TripleProof, &TripleProof)> {
+        if self.attack_key_exists() {
+            match (&self.own_triple, &self.other_triple) {
+                (Some(own), Some(other)) => Some((own, other)),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Get the bilateral receipt pair if complete.
+    ///
+    /// **Deprecated**: Use [`get_bilateral_triple`] for the 6-packet model.
+    /// This method returns QuadProof for legacy "Full Solve" compatibility.
+    #[must_use]
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use get_bilateral_triple() for the 6-packet model"
+    )]
     pub fn get_bilateral_receipt(&self) -> Option<(&QuadProof, &QuadProof)> {
         if self.is_complete() {
             match (&self.own_quad, &self.other_quad) {
@@ -933,7 +991,7 @@ mod tests {
     }
 
     #[test]
-    fn bilateral_receipt_available_when_complete() {
+    fn bilateral_triple_available_when_complete() {
         let alice_kp = KeyPair::generate();
         let bob_kp = KeyPair::generate();
 
@@ -944,13 +1002,14 @@ mod tests {
             |_| true,
         );
 
-        let alice_receipt = alice.get_bilateral_receipt();
-        let bob_receipt = bob.get_bilateral_receipt();
+        // 6-packet model uses bilateral triples as the receipt
+        let alice_receipt = alice.get_bilateral_triple();
+        let bob_receipt = bob.get_bilateral_triple();
 
         assert!(alice_receipt.is_some());
         assert!(bob_receipt.is_some());
 
-        // Alice's other_quad should match Bob's own_quad (and vice versa)
+        // Alice's other_triple should match Bob's own_triple (and vice versa)
         let (alice_own, alice_other) = alice_receipt.unwrap();
         let (bob_own, bob_other) = bob_receipt.unwrap();
 
@@ -1319,7 +1378,7 @@ mod tests {
     }
 
     #[test]
-    fn get_decision_pending_returns_abort() {
+    fn get_decision_pending_returns_pending() {
         let alice_kp = KeyPair::generate();
         let bob_kp = KeyPair::generate();
 
@@ -1329,8 +1388,8 @@ mod tests {
             bob_kp.public_key().clone(),
         );
 
-        // Before completion, decision should be Abort (safe default)
-        assert!(matches!(alice.get_decision(), Decision::Abort));
+        // Before completion, decision should be Pending (not yet determined)
+        assert!(matches!(alice.get_decision(), Decision::Pending));
     }
 
     #[test]

@@ -148,6 +148,20 @@ impl AdaptiveTGP {
         self.protocol.state()
     }
 
+    /// Check if the attack key exists (6-packet model).
+    ///
+    /// The attack key is an emergent state that exists when both parties
+    /// have constructed their triple proofs. This is the fundamental
+    /// completion check for bilateral coordination.
+    ///
+    /// # Returns
+    ///
+    /// `true` if the attack key exists (both triples present).
+    #[must_use]
+    pub fn attack_key_exists(&self) -> bool {
+        self.protocol.attack_key_exists()
+    }
+
     /// Check if the protocol has reached the fixpoint.
     ///
     /// # Returns
@@ -178,12 +192,32 @@ impl AdaptiveTGP {
         self.protocol.get_decision()
     }
 
+    /// Get the bilateral triple proof pair (6-packet model).
+    ///
+    /// In the 6-packet model, the bilateral receipt is the triple proof pair
+    /// (T_A, T_B). This is "The Knot" that proves coordination.
+    ///
+    /// # Returns
+    ///
+    /// Optional tuple of (own_triple, other_triple) if attack key exists.
+    #[must_use]
+    pub fn get_bilateral_triple(&self) -> Option<(&two_generals::TripleProof, &two_generals::TripleProof)> {
+        self.protocol.get_bilateral_triple()
+    }
+
     /// Get the bilateral receipt pair if complete.
+    ///
+    /// **Deprecated**: Use [`get_bilateral_triple`] for the 6-packet model.
     ///
     /// # Returns
     ///
     /// Optional tuple of (own_quad, other_quad) if complete.
     #[must_use]
+    #[deprecated(
+        since = "0.2.0",
+        note = "Use get_bilateral_triple() for the 6-packet model"
+    )]
+    #[allow(deprecated)]
     pub fn get_bilateral_receipt(&self) -> Option<(&two_generals::QuadProof, &two_generals::QuadProof)> {
         self.protocol.get_bilateral_receipt()
     }
@@ -459,9 +493,9 @@ mod tests {
             std::thread::sleep(Duration::from_millis(1));
         }
 
-        // Verify bilateral receipt
-        let alice_receipt = adaptive_alice.get_bilateral_receipt();
-        let bob_receipt = adaptive_bob.get_bilateral_receipt();
+        // Verify bilateral triple (6-packet model)
+        let alice_receipt = adaptive_alice.get_bilateral_triple();
+        let bob_receipt = adaptive_bob.get_bilateral_triple();
 
         assert!(alice_receipt.is_some());
         assert!(bob_receipt.is_some());
