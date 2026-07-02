@@ -574,8 +574,9 @@ def main() -> int:
     demo_parser.add_argument(
         "--rounds",
         type=int,
-        default=100,
-        help="Maximum simulation rounds",
+        default=10000,
+        help="Flooding budget / runaway backstop (not a protocol timeout); "
+             "the demo exits early at fixpoint",
     )
     demo_parser.add_argument(
         "--verbose", "-v",
