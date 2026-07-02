@@ -1,3 +1,8 @@
+> ⚠️ **DEPRECATED — LEGACY (v1).** Describes the superseded `lean4/` v1 formalization.
+> Canonical: [`v2/`](v2/) (6-packet C→D→T model), claimed by `paper/main.tex`.
+> v1's `bilateral_receipt_property` is an unproven axiom assuming the timed-safety
+> conclusion; see `TimeoutMechanism.lean` header. Treat below as historical.
+
 # Supplementary Proofs - Deep Theoretical Analysis
 
 This document describes the supplementary formal proofs that address subtle theoretical concerns about the Two Generals Protocol verification.

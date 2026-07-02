@@ -1,14 +1,26 @@
 /-
-  Timeout Mechanism for Two Generals Protocol
+  ⚠️  DEPRECATED — LEGACY (v1) LAYER  ⚠️
 
+  This file is part of the SUPERSEDED `lean4/` v1 formalization.
+  The CANONICAL, current formalization is `lean4/v2/` (6-packet C→D→T model),
+  which is what the paper claims (`paper/main.tex`). New work belongs in v2.
+
+  KNOWN UNSOUNDNESS IN THIS FILE:
+  `bilateral_receipt_property` (below) is an *axiom* asserting
+  `alice.has_receipt → bob.has_receipt`, i.e. a ZERO-WIDTH delivery window.
+  This is the bounded-deadline ε assumed into existence. The theorem
+  `timeout_safety_with_bilateral` inherits its conclusion from this axiom —
+  it is NOT independently proven for the timed case. The honest treatment
+  lives in v2 as the terminal-state symmetry result (`LocalDetect.lean`,
+  `gray_unreliable_always_symmetric`); the timed/deadline regime is
+  intentionally left unmechanized there and stated in the paper as
+  safety-with-probability 1−ε.
+
+  ----------------------------------------------------------------
+  Original v1 module doc:
+
+  Timeout Mechanism for Two Generals Protocol.
   Formalizes coordinated abort via timeout mechanism.
-
-  Key results:
-  - Both parties use same timeout configuration
-  - Timeout triggers coordinated abort decision
-  - Safety maintained: timeout → both abort (coordinated failure)
-
-  Now uses Mathlib for Bool facts - eliminates unnecessary axioms!
 -/
 
 import Mathlib.Tactic
@@ -161,7 +173,10 @@ theorem timeout_coordination (s : ProtocolStateTimeout)
 /-! ## Integration With Protocol -/
 
 -- Axiom: Bilateral receipt means both parties have it
--- (This will be proven when integrating with TwoGenerals.lean)
+-- ⚠️ UNPROVEN AND UNSOUND FOR THE TIMED CASE: this asserts a zero-width
+-- delivery window (alice.has_receipt → bob.has_receipt at the same instant),
+-- which is exactly the bounded-deadline ε assumed away. See the file header.
+-- Do NOT cite timeout_safety_with_bilateral as a mechanized result.
 axiom bilateral_receipt_property : ∀ (s : ProtocolStateTimeout),
   s.alice.has_receipt = true → s.bob.has_receipt = true
 

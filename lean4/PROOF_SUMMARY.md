@@ -1,3 +1,10 @@
+> ⚠️ **DEPRECATED — LEGACY (v1).** This document describes the superseded `lean4/`
+> v1 formalization. The **canonical** formalization is [`v2/`](v2/) (6-packet C→D→T
+> model), which is what `paper/main.tex` claims. Treat v1 results below as historical.
+> In particular, v1's `bilateral_receipt_property` is an *unproven axiom* that assumes
+> the timed-safety conclusion (zero delivery window); v2 replaces it with the honest
+> terminal-state symmetry theorem and leaves the timed/deadline regime unmechanized.
+
 # Complete Formal Verification Summary
 
 ## Overview
