@@ -71,6 +71,14 @@ Michael~J. Fischer, Nancy~A. Lynch, and Michael~S. Paterson.
 \newblock In {\em Journal of the ACM}, volume~32, pages 374--382. ACM, 1985.
 \newblock FLP impossibility for asynchronous consensus.
 
+\bibitem{godard2021coordinated}
+Emmanuel Godard and Eloi Perdereau.
+\newblock Back to the coordinated attack problem.
+\newblock {\em arXiv preprint arXiv:2103.10816}, 2021.
+\newblock Characterizes solvable message adversaries for Uniform Consensus; the
+  problem is solvable under fair adversaries and impossible only under
+  unrestricted omission.
+
 \bibitem{gray1978notes}
 Jim Gray.
 \newblock Notes on data base operating systems.

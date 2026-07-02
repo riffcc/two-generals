@@ -8,10 +8,10 @@ For 47 years, the Two Generals Problem has been considered unsolvable. We have p
 
     \item \textbf{Clarifying the model:} The ``unreliable channel'' of the Two Generals story must be interpreted as fair-lossy---a channel that never delivers anything is not a channel but the absence of one (Proposition~\ref{prop:nondegen}). In the physically meaningful model, TGP works.
 
-    \item \textbf{Achieving an epistemic fixpoint:} The bilateral receipt pair $(Q_A, Q_B)$ is a finite cryptographic artifact encoding the infinite epistemic hierarchy that Gray claimed could not be achieved (Theorem~\ref{thm:fixpoint}).
+    \item \textbf{Achieving an epistemic fixpoint:} The bilateral triple pair $(T_A, T_B)$ is a finite cryptographic artifact encoding the infinite epistemic hierarchy that Gray claimed could not be achieved (Theorem~\ref{thm:fixpoint}).
 \end{enumerate}
 
-The result: deterministic coordination with probability $1 - 10^{-1565}$ under fair-lossy channels, with \textbf{zero asymmetric outcomes} across all testing.
+The result: in the terminal-state regime, safety is \emph{deterministic}---every completed execution yields a symmetric outcome, including under total channel failure (Theorem~\ref{thm:safety}). Under a bounded deadline, safety holds with probability $1 - 10^{-1565}$ (Theorem~\ref{thm:liveness}), with \textbf{zero asymmetric outcomes} observed across all testing.
 
 The key insight---that the existence of a proof can guarantee the constructibility of its counterpart---extends naturally to Byzantine fault tolerance, achieving consensus in two flooding rounds without complex view-change protocols.
 
@@ -24,7 +24,7 @@ For the majority of internet traffic---small API calls, WebSocket messages, DNS 
 TGP thus represents not a niche solution for hostile networks, but a \textbf{fundamental improvement to coordination primitives} applicable across all network conditions, with graceful linear degradation where TCP suffers exponential collapse.
 
 \paragraph{Formal Verification.}
-The Lean 4 formalization (\texttt{lean4/v2/}) provides machine-verified guarantees with \textbf{zero \texttt{sorry} statements}---the proofs are complete with no deferred obligations. The verification includes \textbf{186+ theorems across 14 files}, covering:
+The Lean 4 formalization (\texttt{lean4/v2/}) provides machine-verified guarantees with \textbf{zero \texttt{sorry} statements}---the proofs are complete with no deferred obligations. The verification includes \textbf{350+ theorems and lemmas across 17 files}, covering:
 
 \begin{center}
 \begin{tabular}{llll}
@@ -46,6 +46,8 @@ LocalDetect & \texttt{LocalDetect.lean} & Attack key detectability \\
 Epistemic & \texttt{Epistemic.lean} & Knowledge levels \\
 Solution & \texttt{Solution.lean} & Main theorem synthesis \\
 TGPMinimal & \texttt{TGPMinimal.lean} & 8-bit crash safety \\
+Fair Exchange & \texttt{FairExchange.lean} & Bilateral fair-exchange extension \\
+ & \texttt{FairExchangeStandalone.lean} & Standalone fair-exchange variant \\
 \bottomrule
 \end{tabular}
 \end{center}

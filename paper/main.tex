@@ -34,7 +34,6 @@
 \newcommand{\Com}[1]{C_{#1}}
 \newcommand{\Double}[1]{D_{#1}}
 \newcommand{\Triple}[1]{T_{#1}}
-\newcommand{\Quad}[1]{Q_{#1}}
 \newcommand{\Sign}[2]{\mathsf{Sign}_{#1}(#2)}
 \newcommand{\Verify}[3]{\mathsf{Verify}_{#1}(#2, #3)}
 \newcommand{\Know}[2]{K_{#1}(#2)}
@@ -60,9 +59,9 @@
 \begin{abstract}
 The Two Generals Problem (Gray, 1978) established that coordinated action over unreliable channels is impossible via finite acknowledgment sequences---any message could be ``the last'' that fails. The Halpern-Moses impossibility result (1990) formalized this as the unachievability of common knowledge in asynchronous systems. We prove both results admit a resolution through \emph{bilateral cryptographic construction}: a three-phase, six-packet protocol ($C_A, C_B \to D_A, D_B \to T_A, T_B$) where the \emph{attack key}---an emergent tripartite construction---can only exist if both parties can compute it. The key insight: Gray's impossibility proof assumes closure under message removal (removing a delivered message yields another valid execution), but fair-lossy channels violate this assumption.
 
-\textbf{Core claim:} $\forall$ adversary behavior: outcome $\in \{\text{CoordinatedAttack}, \text{CoordinatedAbort}\}$. Never asymmetric. Gray said symmetric outcomes are impossible; we prove they are guaranteed.
+\textbf{Core claim:} $\forall$ adversary behavior: outcome $\in \{\text{CoordinatedAttack}, \text{CoordinatedAbort}\}$. Never asymmetric in any terminal state. Gray said symmetric outcomes are impossible; we prove they are guaranteed.
 
-Our contributions: (1) A deterministic coordination protocol achieving symmetric outcomes (both ATTACK or both ABORT, never asymmetric) under \emph{all} adversary conditions---including total channel failure (NoChannel). (2) Formal proofs in Lean 4: \textbf{186+ theorems with zero \texttt{sorry} statements}, including exhaustive 256-case bilateral determination, Gray's closure failure via concrete witness, and trust boundary verification via \texttt{\#print axioms}. (3) Extension to Byzantine fault tolerance for $n = 3f + 1$ nodes, achieving consensus in two flooding rounds without view-change or $O(n^2)$ message complexity. (4) Empirical validation: 10,500 test runs across 0--98\% packet loss with zero asymmetric outcomes. (5) \textbf{7$\times$ latency improvement over TCP even under ideal conditions}. (6) \textbf{Lightweight TGP: an 8-bit safety primitive} for pre-authenticated channels. Reference implementations in Python and Rust are provided under AGPLv3.
+Our contributions: (1) A coordination protocol with \emph{deterministic terminal-state safety}---symmetric outcomes (both ATTACK or both ABORT, never asymmetric) under all adversary conditions including total channel failure (NoChannel)---and bounded-deadline reliability $1-10^{-1565}$. (2) Formal proofs in Lean 4: \textbf{350+ theorems with zero \texttt{sorry} statements}, including exhaustive 256-case bilateral determination, Gray's closure failure via concrete witness, and trust boundary verification via \texttt{\#print axioms}. (3) Extension to Byzantine fault tolerance for $n = 3f + 1$ nodes, achieving consensus in two flooding rounds without view-change or $O(n^2)$ message complexity. (4) Empirical validation: 10,500 test runs across 0--98\% packet loss with zero asymmetric outcomes. (5) \textbf{7$\times$ latency improvement over TCP even under ideal conditions}. (6) \textbf{Lightweight TGP: an 8-bit safety primitive} for pre-authenticated channels. Reference implementations in Python and Rust are provided under AGPLv3.
 \end{abstract}
 
 %==============================================================================

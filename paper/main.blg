@@ -1,4 +1,4 @@
-This is BibTeX, Version 0.99d (TeX Live 2025)
+This is BibTeX, Version 0.99d (TeX Live 2025/dev/Debian)
 Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: main.aux
 The style file: plain.bst
@@ -6,45 +6,45 @@ Database file #1: references.bib
 Warning--can't use both volume and number fields in dwork1988consensus
 Warning--can't use both volume and number fields in fischer1985impossibility
 Warning--can't use both volume and number fields in lamport1982byzantine
-You've used 17 entries,
+You've used 18 entries,
             2118 wiz_defined-function locations,
-            623 strings with 7562 characters,
-and the built_in function-call counts, 7042 in all, are:
-= -- 747
-> -- 288
+            629 strings with 7852 characters,
+and the built_in function-call counts, 7291 in all, are:
+= -- 772
+> -- 301
 < -- 12
-+ -- 116
-- -- 96
-* -- 457
-:= -- 1095
-add.period$ -- 77
-call.type$ -- 17
-change.case$ -- 98
++ -- 121
+- -- 100
+* -- 469
+:= -- 1142
+add.period$ -- 81
+call.type$ -- 18
+change.case$ -- 103
 chr.to.int$ -- 0
-cite$ -- 20
-duplicate$ -- 288
-empty$ -- 552
-format.name$ -- 96
-if$ -- 1554
+cite$ -- 21
+duplicate$ -- 298
+empty$ -- 569
+format.name$ -- 100
+if$ -- 1604
 int.to.chr$ -- 0
-int.to.str$ -- 17
-missing$ -- 17
-newline$ -- 105
-num.names$ -- 34
-pop$ -- 98
+int.to.str$ -- 18
+missing$ -- 18
+newline$ -- 111
+num.names$ -- 36
+pop$ -- 102
 preamble$ -- 1
-purify$ -- 82
+purify$ -- 86
 quote$ -- 0
-skip$ -- 220
+skip$ -- 228
 stack$ -- 0
-substring$ -- 446
-swap$ -- 106
+substring$ -- 451
+swap$ -- 107
 text.length$ -- 12
 text.prefix$ -- 0
 top$ -- 0
-type$ -- 66
+type$ -- 70
 warning$ -- 3
-while$ -- 69
-width$ -- 19
-write$ -- 234
+while$ -- 71
+width$ -- 20
+write$ -- 246
 (There were 3 warnings)

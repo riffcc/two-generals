@@ -148,7 +148,7 @@ This means synchronization cost is proportional only to the \emph{differences} b
 
 \begin{verbatim}
 pub struct BilateralSyncReceipt {
-    tgp_proof: QuadProof,        // Coordination guarantee
+    tgp_proof: TripleProof,      // Coordination guarantee
     spore_proof: SporeProof,     // Sync completion guarantee
     combined_sig: BilateralSignature,
 }
@@ -180,7 +180,7 @@ When TGP replaces TCP for mesh coordination (as implemented in Citadel), the per
 Architecture & Memory per Peer & For 100 Peers \\
 \midrule
 TCP (sockets + buffers) & $\sim$120 KB & $\sim$12 MB \\
-TGP-Native (QuadProof only) & $\sim$2.5 KB & $\sim$250 KB \\
+TGP-Native (TripleProof only) & $\sim$2.5 KB & $\sim$250 KB \\
 \midrule
 \textbf{Improvement} & \multicolumn{2}{c}{\textbf{48$\times$ less memory}} \\
 \bottomrule
@@ -200,7 +200,7 @@ TCP mesh coordination requires:
 TGP-Native requires:
 \begin{itemize}
     \item One UDP socket
-    \item QuadProof HashMap (authorized peers)
+    \item TripleProof HashMap (authorized peers)
     \item Continuous flooding loop
 \end{itemize}
 

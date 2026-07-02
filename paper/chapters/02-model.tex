@@ -40,6 +40,11 @@ A channel is \emph{fair-lossy} if for any message type flooded continuously, the
 Fair-lossy $\subsetneq$ Unreliable. Every fair-lossy adversary is an unreliable adversary, but not conversely. The ``drop everything forever'' adversary is unreliable but not fair-lossy.
 \end{proposition}
 
+\begin{proposition}[Channel Nondegeneracy]
+\label{prop:nondegen}
+An adversary that suppresses every message forever does not describe a degraded channel but the \emph{absence} of a channel: it violates the fair-lossy property (Definition~\ref{def:fairlossy}), since continuously flooded messages are never delivered, and it precludes coordination of any kind---no information crosses the medium. The ``unreliable channel'' presupposed by the Two Generals story is a medium through which the generals can communicate in principle, i.e.\ the fair-lossy model, not the strictly stronger adversary subsuming total silence that Gray formalizes.
+\end{proposition}
+
 \subsubsection{TGP's Core Guarantee}
 
 \begin{theorem}[Universal Symmetry]
@@ -77,6 +82,11 @@ Fair-lossy channels are not closed under single-message removal. The proof const
 \end{theorem}
 
 This is proven in Lean 4 as \texttt{fair\_lossy\_not\_closed\_under\_removal}.
+
+\begin{remark}[The closure step cannot produce asymmetry]
+\label{rmk:closure-defeat}
+The denial of Gray's induction is sharper than channel semantics alone. Because the attack key is a \emph{bilateral} predicate---it exists if and only if both parties can compute it---removing any set of messages from an execution yields a terminal state that is either coordinated attack (both attack) or coordinated abort (both abort), never an asymmetric one (Theorem~\ref{thm:safety}). Gray's closure step, which requires the removal to \emph{manufacture} asymmetry, therefore has no legal target against this construction; this holds with no fair-lossy assumption. Fair-lossy (Theorem~\ref{thm:closure-failure}) is what separately guarantees \emph{Validity}---that the bilateral key completes when both parties intend to attack---not Safety. The classical formulations model epistemically thin messages over which closure is admissible; a self-certifying bilateral knot lies outside that class.
+\end{remark}
 
 \subsection{Cryptographic Primitives}
 
