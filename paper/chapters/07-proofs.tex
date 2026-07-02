@@ -20,7 +20,7 @@ The attack key exists if and only if \emph{all three} components exist. By case 
     \item Otherwise: attack key is $\mathsf{none}$ $\Rightarrow$ both $\Abort$
 \end{itemize}
 
-There is no Boolean assignment where exactly one party can attack. The Lean 4 theorem \texttt{gray\_unreliable\_always\_symmetric} proves this by exhaustive case analysis over all $2^4$ terminal states, with \emph{no fair-lossy assumption}---it classifies the \emph{terminal} state of an execution (\texttt{LocalDetect.lean}; the formalization explicitly parks timed/deadline behavior in a separate ``Timing Question'' section). Bounded-deadline reliability is the subject of Theorem~\ref{thm:liveness}.
+There is no Boolean assignment where exactly one party can attack. The Lean 4 theorem \texttt{gray\_unreliable\_always\_symmetric} proves this by exhaustive case analysis over all $2^4$ terminal states, with \emph{no fair-lossy assumption}---it classifies the \emph{terminal} state of an execution (\texttt{LocalDetect.lean}; the formalization explicitly parks timed/deadline behavior in a separate ``Timing Question'' section). Bounded-deadline reliability is the subject of Theorem~\ref{thm:liveness}. This is one of three exhaustive symmetry analyses in the formalization at complementary granularities: $2^4$ terminal attack-key states here, $2^6$ delivery states (\texttt{Exhaustive.lean}), and $2^8$ channel-state combinations for the no-pivotal-message property; each establishes symmetry over its own state space.
 
 \textbf{Critical:} This is pure case analysis on the attack key structure. The channel model is irrelevant to safety---even under NoChannel (total message loss), outcomes are symmetric (both abort).
 \end{proof}
