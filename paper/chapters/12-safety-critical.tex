@@ -38,7 +38,7 @@ TGP's Lean 4 formalization directly addresses these requirements:
 \toprule
 \textbf{DAL-A Requirement} & \textbf{TGP Satisfaction} \\
 \midrule
-Formal correctness proof & 9 theorems (\texttt{TGPMinimal.lean}), 0 \texttt{sorry} \\
+Formal correctness proof & 12 theorems + 3 axioms (\texttt{TGPMinimal.lean}), 0 \texttt{sorry} \\
 Safety property verification & \texttt{theorem safety}: No asymmetric decisions \\
 Liveness verification & \texttt{theorem liveness}: Progress under fair-lossy \\
 Complete requirements coverage & All protocol phases formally specified \\
@@ -85,7 +85,7 @@ Each party advances phases only after observing the counterparty's acknowledgmen
     \item \texttt{ATTACK} decision: Requires \emph{both} being in \texttt{READY} \emph{and} seeing counterparty in \texttt{READY}
 \end{itemize}
 
-\paragraph{Proven Theorems in \texttt{TGPMinimal.lean} (9 total, 0 \texttt{sorry}).}
+\paragraph{Proven Theorems in \texttt{TGPMinimal.lean} (12 total, 0 \texttt{sorry}).}
 The formalization proves the following properties from first principles:
 
 \begin{center}
@@ -93,10 +93,11 @@ The formalization proves the following properties from first principles:
 \toprule
 \textbf{Theorem} & \textbf{Statement} \\
 \midrule
-\texttt{double\_needs\_their\_commit} & Phase advancement requires seeing counterparty \\
-\texttt{ready\_needs\_their\_double} & Cannot skip phases---must observe each level \\
+\texttt{advance\_from\_commit\_needs\_seen} & To leave COMMIT, must have observed $\geq$ COMMIT \\
+\texttt{advance\_from\_double\_needs\_seen} & To leave DOUBLE, must have observed $\geq$ DOUBLE \\
 \texttt{attack\_needs\_ready} & Attack decision requires being in READY phase \\
 \texttt{attack\_needs\_their\_ready} & Attack requires \emph{seeing} counterparty in READY \\
+\texttt{action\_requires\_both\_alive} & Coordinated action requires both parties active \\
 \texttt{safety} & \textbf{Main theorem:} If both decide, decisions are equal \\
 \texttt{impossible\_alice\_attack\_bob\_abort} & Asymmetric outcome is \emph{impossible} \\
 \texttt{impossible\_bob\_attack\_alice\_abort} & Symmetric case \\
@@ -104,7 +105,7 @@ The formalization proves the following properties from first principles:
 \end{tabular}
 \end{center}
 
-Of the entries above, \texttt{double\_needs\_their\_commit} and \texttt{ready\_needs\_their\_double} are channel axioms---the phase-advancement premises (physical properties of the pre-authenticated channel), not derived theorems; the remaining rows are proven. \texttt{TGPMinimal.lean} contains nine theorems in total (0 \texttt{sorry}), including additionally \texttt{crash\_prevents\_dangerous\_action} (Theorem~\ref{thm:crash-safety}), \texttt{bilateral\_attack\_guarantee}, and \texttt{protocol\_correct}.
+All phase-advancement and crash-safety properties are proven, not assumed: \texttt{advance\_from\_*\_needs\_seen} from the definition of \texttt{can\_advance}, and \texttt{action\_requires\_both\_alive} and \texttt{crash\_prevents\_dangerous\_action} (Theorem~\ref{thm:crash-safety}) from \texttt{can\_execute\_action}. \texttt{TGPMinimal.lean} contains twelve theorems in total (0 \texttt{sorry}), additionally including \texttt{bilateral\_attack\_guarantee} and \texttt{protocol\_correct}. The trusted base is three irreducible modeling axioms only---two channel-authenticity axioms (\texttt{saw\_phase\_means\_they\_sent}) and the fair-lossy flooding guarantee---which are precisely the physical assumptions a pre-authenticated DAL-A channel provides.
 
 \paragraph{Crash Safety: The DAL-A Critical Property.}
 For aviation certification, the most critical property is \textbf{crash safety}: if either party crashes at \emph{any point} during the protocol, the dangerous coordinated action cannot occur. This prevents the nightmare scenario where one controller commits to a maneuver while its partner has failed.

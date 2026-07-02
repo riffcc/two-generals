@@ -172,26 +172,29 @@ axiom saw_phase_means_they_sent_bob :
 
 /-! ## Core Safety Theorems
 
-    These capture protocol invariants: a state is only reachable via valid
-    protocol transitions. The axioms formalize that we only consider states
-    reached by following the advancement rules.
--/
+    Phase advancement is gated definitionally by `can_advance`, which
+    `try_advance` consults: to leave COMMIT one must have observed ≥ COMMIT,
+    to leave DOUBLE one must have observed ≥ DOUBLE. This file formerly
+    asserted the *resulting state invariants* (`my_phase = DOUBLE → saw ≥
+    COMMIT`, and the READY analogue) as axioms ranging over ALL states;
+    that is too strong for the unconstrained `LightweightState` record (it
+    holds only of reachable states) and they were consumed nowhere, so they
+    were removed. The property is enforced at its source — the `can_advance`
+    precondition — proven below, rather than re-asserted after the fact. -/
 
-/-- Axiom: A state in DOUBLE phase must have seen counterparty in COMMIT.
-    This is a protocol invariant - the only way to reach DOUBLE is via
-    can_advance, which requires saw ≥ COMMIT. -/
-axiom double_needs_their_commit :
-  ∀ (s : LightweightState),
-    s.my_phase = Phase.DOUBLE →
-    s.saw_your_phase ≥ Phase.COMMIT
+/-- To advance FROM COMMIT, a party must have observed ≥ COMMIT
+    (definitional, from `can_advance`). -/
+theorem advance_from_commit_needs_seen (s : LightweightState) :
+    can_advance Phase.COMMIT s.saw_your_phase = true →
+    s.saw_your_phase ≥ Phase.COMMIT := by
+  simp [can_advance]
 
-/-- Axiom: A state in READY phase must have seen counterparty in DOUBLE.
-    This is a protocol invariant - the only way to reach READY is via
-    can_advance, which requires saw ≥ DOUBLE. -/
-axiom ready_needs_their_double :
-  ∀ (s : LightweightState),
-    s.my_phase = Phase.READY →
-    s.saw_your_phase ≥ Phase.DOUBLE
+/-- To advance FROM DOUBLE, a party must have observed ≥ DOUBLE
+    (definitional, from `can_advance`). -/
+theorem advance_from_double_needs_seen (s : LightweightState) :
+    can_advance Phase.DOUBLE s.saw_your_phase = true →
+    s.saw_your_phase ≥ Phase.DOUBLE := by
+  simp [can_advance]
 
 /-- Theorem: ATTACK decision requires being in READY phase. -/
 theorem attack_needs_ready (s : LightweightState) :
@@ -289,25 +292,26 @@ def can_execute_action (s : CrashableState) : Bool :=
   can_attack s.alice_state ∧
   can_attack s.bob_state
 
-/-! ## Crash Axioms -/
+/-! ## Crash Semantics
 
-/-- Axiom: A crashed party cannot advance phases. -/
-axiom crashed_cannot_advance :
-  ∀ (s : LightweightState) (status : Status),
-    status = Status.Crashed →
-    try_advance s = s
+    Two claims formerly asserted as axioms were removed because neither held
+    up as written:
+    - `crashed_cannot_advance` was FALSE: `try_advance` does not reference
+      `Status`, so in this model a crash does not by itself halt advancement.
+    - `crashed_stops_flooding` was vacuous (its conclusion was `True`).
+    Crash safety does not depend on either: `crash_prevents_dangerous_action`
+    below unpacks `can_execute_action`, whose aliveness conjuncts already make
+    a crashed party unable to execute the coordinated action. -/
 
-/-- Axiom: A crashed party stops flooding. -/
-axiom crashed_stops_flooding :
-  ∀ (status : Status),
-    status = Status.Crashed →
-    True  -- Counterparty stops receiving new packets
-
-/-- Axiom: Coordinated action requires both parties alive. -/
-axiom action_requires_both_alive :
-  ∀ (s : CrashableState),
+/-- Coordinated action requires both parties alive — provable from the
+    definition of `can_execute_action`, in which each party's aliveness is
+    a conjunct. (Was an axiom; the property follows by unpacking the def.) -/
+theorem action_requires_both_alive (s : CrashableState) :
     can_execute_action s = true →
-    s.alice_status = Status.Active ∧ s.bob_status = Status.Active
+    s.alice_status = Status.Active ∧ s.bob_status = Status.Active := by
+  intro h
+  simp only [can_execute_action] at h
+  refine ⟨?_, ?_⟩ <;> simp_all
 
 /-! ## Main Crash Safety Theorem -/
 
