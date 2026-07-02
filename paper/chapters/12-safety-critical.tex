@@ -38,7 +38,7 @@ TGP's Lean 4 formalization directly addresses these requirements:
 \toprule
 \textbf{DAL-A Requirement} & \textbf{TGP Satisfaction} \\
 \midrule
-Formal correctness proof & 12 theorems + 3 axioms (\texttt{TGPMinimal.lean}), 0 \texttt{sorry} \\
+Formal correctness proof & 12 theorems + 2 axioms (\texttt{TGPMinimal.lean}), 0 \texttt{sorry} \\
 Safety property verification & \texttt{theorem safety}: No asymmetric decisions \\
 Liveness verification & \texttt{theorem liveness}: Progress under fair-lossy \\
 Complete requirements coverage & All protocol phases formally specified \\
@@ -105,7 +105,7 @@ The formalization proves the following properties from first principles:
 \end{tabular}
 \end{center}
 
-All phase-advancement and crash-safety properties are proven, not assumed: \texttt{advance\_from\_*\_needs\_seen} from the definition of \texttt{can\_advance}, and \texttt{action\_requires\_both\_alive} and \texttt{crash\_prevents\_dangerous\_action} (Theorem~\ref{thm:crash-safety}) from \texttt{can\_execute\_action}. \texttt{TGPMinimal.lean} contains twelve theorems in total (0 \texttt{sorry}), additionally including \texttt{bilateral\_attack\_guarantee} and \texttt{protocol\_correct}. The trusted base is three irreducible modeling axioms only---two channel-authenticity axioms (\texttt{saw\_phase\_means\_they\_sent}) and the fair-lossy flooding guarantee---which are precisely the physical assumptions a pre-authenticated DAL-A channel provides.
+All phase-advancement and crash-safety properties are proven, not assumed: \texttt{advance\_from\_*\_needs\_seen} from the definition of \texttt{can\_advance}, and \texttt{action\_requires\_both\_alive} and \texttt{crash\_prevents\_dangerous\_action} (Theorem~\ref{thm:crash-safety}) from \texttt{can\_execute\_action}. \texttt{TGPMinimal.lean} contains twelve theorems in total (0 \texttt{sorry}), additionally including \texttt{bilateral\_attack\_guarantee} and \texttt{protocol\_correct}. The trusted base is two irreducible modeling axioms only---the channel-authenticity pair \texttt{saw\_phase\_means\_they\_sent}---which is precisely the pre-authentication guarantee a DAL-A channel provides; fair-lossy delivery is a property of the channel itself (formalized in \texttt{Channel.lean}), not an axiom of the 8-bit state model.
 
 \paragraph{Crash Safety: The DAL-A Critical Property.}
 For aviation certification, the most critical property is \textbf{crash safety}: if either party crashes at \emph{any point} during the protocol, the dangerous coordinated action cannot occur. This prevents the nightmare scenario where one controller commits to a maneuver while its partner has failed.

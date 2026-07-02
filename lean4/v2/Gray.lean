@@ -59,12 +59,12 @@ structure GrayChain where
 def has_last_message (chain : GrayChain) : Bool :=
   chain.messages.length > 0
 
-/-- Gray's key lemma: the adversary can always drop the last message.
-    This is the crux of his impossibility argument. -/
-axiom gray_last_message_can_fail :
-  ∀ (chain : GrayChain),
-  has_last_message chain = true →
-  True  -- The adversary can drop the last message
+/- Gray's crux move — the adversary may drop the last message of any finite
+    chain — is the load-bearing premise of his impossibility argument and is
+    engaged structurally via the `GrayChain` / `has_last_message` model and
+    the path/closure axioms in `GrayCore.lean`. The former
+    `gray_last_message_can_fail` axiom here (conclusion `True`) was vacuous
+    and consumed nowhere; it was removed rather than carried as a placeholder. -/
 
 /-! ## Why Gray's Argument Does Not Apply to TGP
 

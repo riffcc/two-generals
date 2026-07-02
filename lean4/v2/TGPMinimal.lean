@@ -342,14 +342,16 @@ theorem crash_prevents_dangerous_action (s : CrashableState) :
     rw [h_bob_crashed]
     simp [Status.crashed_ne_active]
 
-/-! ## Flooding Guarantee -/
+/-! ## Flooding Guarantee
 
-/-- Under fair-lossy channels, flooded messages eventually arrive. -/
-axiom flooding_guarantee :
-  ∀ (sender_phase : Phase),
-    -- If sender floods phase continuously
-    -- Then receiver eventually sees that phase
-    True
+    The fair-lossy delivery property — that a continuously flooded phase is
+    eventually observed by the counterparty — is a property of the channel
+    the primitive runs on, not of this 8-bit state model, which has no
+    delivery term to state it against. It is formalized for the full model
+    in `Channel.lean` (`flooding_guarantees_message_delivery`) and stated
+    as a physical channel assumption in the paper. The former
+    `flooding_guarantee` axiom here (conclusion `True`) was removed as a
+    vacuous placeholder. -/
 
 /-! ## Bilateral Construction Property -/
 

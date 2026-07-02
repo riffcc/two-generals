@@ -87,12 +87,17 @@ def t_proves : SenderProof := {
     - D_B required proves Bob created D_B
 -/
 
-/-- Axiom: Cryptographic signatures are unforgeable.
-    If you receive a signed message, the signer created it. -/
-axiom signature_unforgeable :
-  ∀ (_party : Party) (_msg : Message),
-  -- If you receive msg signed by party, then party created msg
-  True  -- The actual crypto proof is outside Lean's scope
+/-! ## Signature authenticity
+
+    Message authenticity is modeled by the `Message.sender` field: a
+    message's sender IS its signer, by construction. The real-world
+    assumption — that an adversary cannot forge a signature, i.e. cannot
+    produce a message whose `sender` they are not — is a property of the
+    concrete signature scheme (Ed25519; see the paper's cryptographic
+    primitives), not of this abstract message model, which has no
+    forgery/adversary term to state it against. The former
+    `signature_unforgeable` axiom (conclusion `True`) was removed rather
+    than carried as a vacuous placeholder. -/
 
 /-- When Alice has T_B, she has proof of Bob's complete state. -/
 theorem t_b_proves_bob_state (s : ProtocolState)
@@ -140,19 +145,12 @@ theorem t_b_implies_alice_to_bob_works :
     This is the key insight: T_B proves BILATERAL channel success.
 -/
 
-/-- T_B arriving at Alice proves both channel directions work.
-
-    This is an axiom because it combines:
-    - Cryptographic fact: T_B contains D_A
-    - Channel fact: if T_B arrived, Bob→Alice works
-    - Structural fact: D_A in T_B means Alice→Bob delivered D_A
--/
-axiom t_b_proves_bilateral_channel :
-  ∀ (s : ProtocolState),
-  s.alice.got_t = true →
-  -- Bob→Alice works (T_B arrived)
-  -- Alice→Bob works (D_A reached Bob, as proven by D_A in T_B)
-  True
+/- The bilateral-channel claim — T_B's arrival proves both directions work
+    (T_B arrived Bob→Alice; D_A is embedded in T_B, so Alice→Bob delivered
+    D_A) — is not carried as an axiom. Its structural core is the proven
+    theorem `t_b_proves_d_a_delivered : D_A ∈ embeds T_B` above; the
+    channel-delivery half is the fair-lossy assumption formalized in
+    Channel.lean. -/
 
 /-! ## What Alice Knows from T_B
 

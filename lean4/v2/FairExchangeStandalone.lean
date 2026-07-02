@@ -149,19 +149,15 @@ structure BobLocalState where
   has_alice_D : Bool      -- Bob received D_A from Alice
   has_alice_T : Bool      -- Bob received T_A from Alice
 
-/-- EMBEDDING AXIOM: This is what a concrete protocol must satisfy.
-
-    In TGP, T_B = Sign_B(D_B, D_A). So T_B contains D_A.
-    If Alice receives T_B, she KNOWS Bob had D_A (to construct T_B).
-
-    This is an AXIOM because we're not modeling the cryptographic details.
-    A concrete instantiation (TGP) must PROVE this property holds. -/
-axiom embedding_T_contains_D :
-  ∀ (alice : AliceLocalState) (bob : BobLocalState),
-    alice.has_bob_T = true → -- If Alice has T_B
-    -- Then Bob must have had D_A (to construct T_B)
-    -- This is what Alice can INFER from her local state
-    True  -- Placeholder - the real property is about Bob's state when he sent T_B
+/-- Embedding interface assumption (irreducible in this abstract local-state
+    model; the concrete TGP construction discharges it via
+    `ProofStapling.t_b_proves_d_a_delivered`). If Alice holds Bob's triple
+    proof T_B, then Bob possessed D_A — because T_B embeds D_A
+    (T_B = Sign_B(D_B, D_A)), so constructing T_B required having D_A.
+    Stated on Bob's local state. -/
+axiom embedding_T_contains_D (alice : AliceLocalState) (bob : BobLocalState) :
+    alice.has_bob_T = true →
+    bob.has_alice_D = true
 
 /-- Alice can compute the artifact from her local state IFF she has T_B.
     Having T_B means:
@@ -175,20 +171,13 @@ def alice_can_compute (alice : AliceLocalState) : Bool :=
 def bob_can_compute (bob : BobLocalState) : Bool :=
   bob.has_own_D && bob.has_alice_T
 
-/-- PROTOCOL ASSUMPTION: If Alice has T_B, then Bob was able to construct T_B.
-    For Bob to construct T_B, Bob needed D_A.
-    If Bob had D_A and constructed T_B, Bob can also construct T_A once he
-    receives D_B (which Alice is flooding).
-
-    Under fair-lossy: if Alice has T_B, Bob will eventually have T_A.
-    Under adversarial: neither may complete, but that's symmetric. -/
-axiom fair_lossy_symmetry :
-  ∀ (alice : AliceLocalState) (bob : BobLocalState),
-    -- If the channel is fair-lossy and Alice completed...
+/-- Fair-lossy liveness assumption (irreducible): if Alice can compute the
+    artifact — i.e. she holds T_B, so she is flooding T_A — then under a
+    fair-lossy channel Bob eventually receives T_A and can compute too.
+    This is the bilateral-symmetry / liveness premise, not a safety claim. -/
+axiom fair_lossy_symmetry (alice : AliceLocalState) (bob : BobLocalState) :
     alice_can_compute alice = true →
-    -- ...then Bob will eventually complete too
-    -- (Or the channel is adversarial and neither completes)
-    True  -- This is a liveness property, not safety
+    bob_can_compute bob = true
 
 /-! ## Part 4: The Safety Theorem (What We Actually Prove)
 
