@@ -35,6 +35,47 @@ TGP builds coordination as a spatial structure: two halves of an arch that must 
 
 This is the structural reason no message is pivotal. In a chain, severing the last link leaves the sender believing completion occurred while the receiver knows it did not. In the arch, removing any stone leaves the structure incomplete for \emph{both} parties: there is no configuration of the bilateral object in which one party holds a completed key and the other does not. Completeness is a property of the joint state, not of any party's position in a delivery sequence. The braid has no end to cut.
 
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[>=Stealth, font=\small,
+    blk/.style={draw, rounded corners=2pt, minimum height=0.62cm, minimum width=0.72cm},
+    lostblk/.style={draw, rounded corners=2pt, minimum height=0.62cm, minimum width=0.72cm, dashed, red!70!black}]
+
+% ===== LEFT: the temporal chain =====
+\node[blk] (c) at (0,0)    {$C$};
+\node[blk] (d) at (1.05,0) {$D$};
+\node[blk] (t) at (2.10,0) {$T$};
+\node[lostblk] (q) at (3.55,0) {$Q$};
+\draw[->] (c) -- (d);
+\draw[->] (d) -- (t);
+\draw[->, dashed, red!70!black, thick] (t) -- (q)
+    node[midway, above, red!70!black, font=\footnotesize] {loss};
+\draw[red!70!black, thick, dashed] (3.10,-0.55) -- (4.00,-0.55);
+\node[font=\footnotesize, red!70!black] at (3.55,-0.82) {last message};
+\node[font=\small, red!70!black] at (3.55,0.78) {$\boldsymbol{\times}$};
+\node[font=\footnotesize, align=center] at (1.77,-1.55)
+    {\textbf{Chain} $(1\oplus1)$: temporal\\ sever the last link $\Rightarrow$\\ sender and receiver disagree};
+
+% ===== RIGHT: the spatial arch =====
+\begin{scope}[xshift=7.4cm]
+\node[blk] (alice) at (-1.4,-0.2) {Alice};
+\node[blk] (bob)   at ( 1.4,-0.2) {Bob};
+\node[blk, fill=blue!12, very thick] (key) at (0,1.6) {key};
+\draw[ultra thick, blue!55!black] (alice.north) -- (key.south west);
+\draw[ultra thick, blue!55!black] (bob.north)   -- (key.south east);
+\node[blue!55!black, font=\footnotesize] at (-0.78,0.70) {$D_A$};
+\node[blue!55!black, font=\footnotesize] at ( 0.78,0.70) {$D_B$};
+\draw[gray, dashed] (-1.4,-0.72) -- (1.4,-0.72);
+\node[gray, font=\footnotesize\itshape] at (0,-0.97) {lossy channel};
+\node[font=\footnotesize, align=center] at (0,-1.55)
+    {\textbf{Arch} $(1\times1)$: spatial\\ remove either half $\Rightarrow$\\ incomplete for \emph{both}};
+\end{scope}
+
+\end{tikzpicture}
+\caption{The geometric difference. \textbf{Left:} the classical construction is a temporal chain of acknowledgments ($C \to D \to T \to \cdots$); the last message is pivotal---sever it and the two parties hold contradictory beliefs about completion. \textbf{Right:} TGP's bilateral knot is a spatial arch---two halves ($D_A$, $D_B$) meeting at a single keystone (the attack key). Removing either half leaves the structure incomplete for both parties; the keystone is forged iff both halves are present. The braid has no end to cut.}
+\label{fig:chain-vs-arch}
+\end{figure}
+
 \subsection{The Cryptographic Knot}
 
 Traditional protocols create a chain of acknowledgments where each link could be the ``last message'' that fails:
