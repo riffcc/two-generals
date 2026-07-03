@@ -27,6 +27,14 @@ Suppose Alice can construct $\Triple{A} = \Sign{A}{\Double{A} \| \Double{B}}$.
 Therefore, if $\Triple{A}$ exists, $\Triple{B}$ is constructible under fair-lossy conditions.
 \end{proof}
 
+\subsection{Spatial Completeness, Not Temporal Sequence}
+
+The standard protocol builds coordination as a temporal chain: one stone, then the next, then the next ($1 \oplus 1 \oplus 1 \oplus \cdots$). Each stone is a message, and safety depends on the \emph{sequence} of arrivals. The last stone is the whole problem---if it falls into the abyss, one party believes the bridge is built while the other knows it is not. That is Gray's induction: sever the final link, and sender and receiver hold contradictory beliefs about completion.
+
+TGP builds coordination as a spatial structure: two halves of an arch that must meet at the keystone to bear any weight ($1 \times 1$). Alice contributes one half ($\Double{A}$), Bob the other ($\Double{B}$); the attack key is forged if and only if both halves are present. If either half is absent---never sent, or sent and lost---the arch cannot stand, and \emph{neither} party crosses. The transition from idle to action depends on a \emph{spatial} requirement (the joint presence of both components) rather than a \emph{temporal} one (the arrival of a final acknowledgment in a sequence).
+
+This is the structural reason no message is pivotal. In a chain, severing the last link leaves the sender believing completion occurred while the receiver knows it did not. In the arch, removing any stone leaves the structure incomplete for \emph{both} parties: there is no configuration of the bilateral object in which one party holds a completed key and the other does not. Completeness is a property of the joint state, not of any party's position in a delivery sequence. The braid has no end to cut.
+
 \subsection{The Cryptographic Knot}
 
 Traditional protocols create a chain of acknowledgments where each link could be the ``last message'' that fails:
